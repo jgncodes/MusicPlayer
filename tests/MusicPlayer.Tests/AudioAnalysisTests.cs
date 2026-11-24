@@ -216,43 +216,4 @@ public class AudioAnalysisTests
                 fixture.FilePath,
                 source.Token));
     }
-
-    // -------------------------------------------------
-    // TEST HELPER: TEMPORARY WAV FILE
-    // -------------------------------------------------
-
-    // AudioAnalysisService reads file paths, not float arrays.
-    // This helper writes our generated signals to temporary
-    // WAV files and deletes them after each test.
-
-    private sealed class TemporaryWavFile : IDisposable
-    {
-        public string FilePath { get; }
-
-        public TemporaryWavFile(
-            float[] samples,
-            int sampleRate)
-        {
-            FilePath = Path.Combine(
-                Path.GetTempPath(),
-                $"MusicPlayerTest_{Guid.NewGuid():N}.wav");
-
-            // Store the samples in 32-bit floating-point WAV.
-            var format =
-                WaveFormat.CreateIeeeFloatWaveFormat(
-                    sampleRate, 1);
-
-            using var writer =
-                new WaveFileWriter(FilePath, format);
-
-            writer.WriteSamples(
-                samples, 0, samples.Length);
-        }
-
-        public void Dispose()
-        {
-            if (File.Exists(FilePath))
-                File.Delete(FilePath);
-        }
-    }
 }
