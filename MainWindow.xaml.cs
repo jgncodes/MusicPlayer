@@ -205,13 +205,19 @@ public partial class MainWindow : Window
     {
         try
         {
-            List<SongFile> files = Directory
-                .EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
-                .Where(path =>
-                    string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(Path.GetExtension(path), ".wav", StringComparison.OrdinalIgnoreCase))
+            // List<SongFile> files = Directory
+            //     .EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
+            //     .Where(path =>
+            //         string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase) ||
+            //         string.Equals(Path.GetExtension(path), ".wav", StringComparison.OrdinalIgnoreCase))
+            //     .Select(path => new SongFile(path, _analysis))
+            //     .OrderBy(song => song.Name, StringComparer.OrdinalIgnoreCase)
+            //     .ToList();
+
+            // Discover supported audio files using tested library logic.
+            List<SongFile> files = MusicLibraryLogic
+                .GetAudioFilePaths(folder)
                 .Select(path => new SongFile(path, _analysis))
-                .OrderBy(song => song.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             _player.Close();
@@ -267,8 +273,13 @@ public partial class MainWindow : Window
         string query = SearchBox.Text.Trim();
         SongFile? previousSelection = SongList.SelectedItem as SongFile;
 
+        // _visibleSongs = _songs
+        //     .Where(song => song.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+        //     .ToList();
+
         _visibleSongs = _songs
-            .Where(song => song.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Where(song => MusicLibraryLogic.MatchesSearch(
+                song.Name, query))
             .ToList();
 
         _ignoreSelectionChanged = true;
