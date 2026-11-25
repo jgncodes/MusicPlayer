@@ -1,0 +1,23 @@
+
+# .NET build outputs
+bin/
+obj/
+
+# Visual Studio and VS Code user data
+.vs/
+*.user
+*.suo
+
+# xUnit test results
+TestResults/
+*.trx
+
+# Code coverage output
+coverage/
+coverage-report/
+coverage.cobertura.xml
+*.coverage
+*.coveragexml
+
+# ReportGenerator output
+coveragereport/

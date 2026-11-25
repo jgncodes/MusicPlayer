@@ -1,0 +1,71 @@
+
+# MusicPlayer Continuous Integration
+#
+# Automatically builds the WPF application,
+# executes the xUnit test suite, and collects
+# code coverage on a Windows runner.
+
+name: MusicPlayer CI
+
+# Run on pushes and pull requests.
+on:
+  push:
+  pull_request:
+
+# Give the workflow read-only repository access.
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+
+    # WPF requires Windows.
+    runs-on: windows-latest
+
+    steps:
+
+      # STEP 1: Download the repository.
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # STEP 2: Install the .NET 10 SDK.
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # STEP 3: Restore project dependencies.
+      - name: Restore dependencies
+        run: >
+          dotnet restore
+          tests/MusicPlayer.Tests/MusicPlayer.Tests.csproj
+
+      # STEP 4: Compile the application and tests.
+      - name: Build solution
+        run: >
+          dotnet build
+          tests/MusicPlayer.Tests/MusicPlayer.Tests.csproj
+          --configuration Release
+          --no-restore
+
+      # STEP 5: Execute all tests and collect coverage.
+      - name: Run tests with coverage
+        run: >
+          dotnet test
+          tests/MusicPlayer.Tests/MusicPlayer.Tests.csproj
+          --configuration Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --logger "trx;LogFileName=MusicPlayer.Tests.trx"
+          --results-directory TestResults
+
+      # STEP 6: Save test reports and coverage files.
+      # Always execute this step, including when tests fail.
+      - name: Upload test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: musicplayer-test-results
+          path: TestResults/
+          if-no-files-found: warn
+          retention-days: 14
