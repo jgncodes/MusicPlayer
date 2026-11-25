@@ -205,14 +205,6 @@ public partial class MainWindow : Window
     {
         try
         {
-            // List<SongFile> files = Directory
-            //     .EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
-            //     .Where(path =>
-            //         string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase) ||
-            //         string.Equals(Path.GetExtension(path), ".wav", StringComparison.OrdinalIgnoreCase))
-            //     .Select(path => new SongFile(path, _analysis))
-            //     .OrderBy(song => song.Name, StringComparer.OrdinalIgnoreCase)
-            //     .ToList();
 
             // Discover supported audio files using tested library logic.
             List<SongFile> files = MusicLibraryLogic
@@ -272,10 +264,6 @@ public partial class MainWindow : Window
     {
         string query = SearchBox.Text.Trim();
         SongFile? previousSelection = SongList.SelectedItem as SongFile;
-
-        // _visibleSongs = _songs
-        //     .Where(song => song.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
-        //     .ToList();
 
         _visibleSongs = _songs
             .Where(song => MusicLibraryLogic.MatchesSearch(
@@ -515,40 +503,75 @@ public partial class MainWindow : Window
     private void Previous_Click(object sender, RoutedEventArgs e) => MoveSong(-1);
     private void Next_Click(object sender, RoutedEventArgs e) => MoveSong(1);
 
+    // private void MoveSong(int direction, bool fromSongEnd = false)
+    // {
+    //     // When searching, previous/next navigate the visible results.
+    //     if (_visibleSongs.Count == 0)
+    //     {
+    //         FinishPlayback();
+    //         return;
+    //     }
+
+    //     int currentIndex = _currentSong == null
+    //         ? -1 : _visibleSongs.IndexOf(_currentSong);
+    //     int nextIndex;
+
+    //     if (_shuffleEnabled && _visibleSongs.Count > 1)
+    //     {
+    //         do { nextIndex = _random.Next(_visibleSongs.Count); }
+    //         while (nextIndex == currentIndex);
+    //     }
+    //     else
+    //     {
+    //         // Automatic playback ends after the last song unless Repeat is on.
+    //         if (fromSongEnd && currentIndex == _visibleSongs.Count - 1)
+    //         {
+    //             FinishPlayback();
+    //             return;
+    //         }
+
+    //         nextIndex = currentIndex < 0
+    //             ? (direction > 0 ? 0 : _visibleSongs.Count - 1)
+    //             : (currentIndex + direction + _visibleSongs.Count) % _visibleSongs.Count;
+    //     }
+
+    //     OpenSong(_visibleSongs[nextIndex], playImmediately: true);
+    // }
+
+
     private void MoveSong(int direction, bool fromSongEnd = false)
     {
-        // When searching, previous/next navigate the visible results.
-        if (_visibleSongs.Count == 0)
+        // Determine the current song's position in the
+        // visible list, not the full music library.
+        int currentIndex = _currentSong == null
+            ? -1
+            : _visibleSongs.IndexOf(_currentSong);
+
+        // Delegate navigation decisions to the tested
+        // PlaybackQueue class.
+        int? nextIndex = PlaybackQueue.GetNextIndex(
+            count: _visibleSongs.Count,
+            currentIndex: currentIndex,
+            direction: direction,
+            shuffle: _shuffleEnabled,
+            fromSongEnd: fromSongEnd,
+            random: _random);
+
+        // A null result means playback should stop.
+        // This happens when the visible list is empty
+        // or automatic playback reaches its end.
+        if (nextIndex is null)
         {
             FinishPlayback();
             return;
         }
 
-        int currentIndex = _currentSong == null
-            ? -1 : _visibleSongs.IndexOf(_currentSong);
-        int nextIndex;
-
-        if (_shuffleEnabled && _visibleSongs.Count > 1)
-        {
-            do { nextIndex = _random.Next(_visibleSongs.Count); }
-            while (nextIndex == currentIndex);
-        }
-        else
-        {
-            // Automatic playback ends after the last song unless Repeat is on.
-            if (fromSongEnd && currentIndex == _visibleSongs.Count - 1)
-            {
-                FinishPlayback();
-                return;
-            }
-
-            nextIndex = currentIndex < 0
-                ? (direction > 0 ? 0 : _visibleSongs.Count - 1)
-                : (currentIndex + direction + _visibleSongs.Count) % _visibleSongs.Count;
-        }
-
-        OpenSong(_visibleSongs[nextIndex], playImmediately: true);
+        // Open the selected song and begin playing.
+        OpenSong(
+            _visibleSongs[nextIndex.Value],
+            playImmediately: true);
     }
+
 
     private void FinishPlayback()
     {
