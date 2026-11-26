@@ -66,7 +66,8 @@ public class PlaybackLifecycleTests
         using var wav = new TemporaryWavFile(new float[40]);
         var first = new RecordingOutput();
         var second = new RecordingOutput();
-        var devices = new Queue<RecordingOutput>([first, second]);
+        var third = new RecordingOutput();
+        var devices = new Queue<RecordingOutput>([first, second, third]);
         var callbacks = new Queue<Action>();
         var player = new AudioPlaybackService(() => devices.Dequeue(), callbacks.Enqueue);
         var errors = new List<Exception>();
@@ -96,16 +97,19 @@ public class PlaybackLifecycleTests
             callbacks.Dequeue()();
             Assert.Same(error, Assert.Single(errors));
             Assert.Equal(0, ended);
+            Assert.True(second.Disposed);
+            Assert.Null(player.Duration);
+            player.Open(new Uri(wav.FilePath));
             byte[] buffer = new byte[256];
-            Assert.True(second.Source.Read(buffer) > 0);
-            Assert.Equal(0, second.Source.Read(buffer));
-            second.NotifyStopped();
+            Assert.True(third.Source.Read(buffer) > 0);
+            Assert.Equal(0, third.Source.Read(buffer));
+            third.NotifyStopped();
             Assert.Equal(0, ended);
             callbacks.Dequeue()();
             Assert.Equal(1, ended);
         }
         finally { player.Close(); }
-        Assert.True(second.Disposed);
+        Assert.True(third.Disposed);
     }
 
     [Theory]

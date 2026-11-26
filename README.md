@@ -43,7 +43,11 @@ In MusicPlayer, choose **File → Open Folder** to browse a music folder. Select
 
 Open **Sound → Equalizer** for ten bands centered at 31.25, 62.5, 125, 250, 500, 1,000, 2,000, 4,000, 8,000, and 16,000 Hz. Each band supports ±12 dB of gain. Built-in presets are **Flat**, **Bass Boost**, **Vocal**, and **V-Shape**. Editing a band marks the curve as **Custom**, and **Reset** restores all bands to 0 dB.
 
-The app keeps the EQ enabled and applies changes during playback. The sample provider runs a cascade of peaking biquad filters independently for each channel. It skips filter bands at or above 45% of the sample rate and attenuates the output by the largest positive configured gain to provide headroom. The curve carries across tracks during the current session.
+The EQ starts flat and enabled. **Bypass EQ** preserves the curve for comparison. Each channel has independent peaking filters with Q = 1.4. A band at or above 45% of the decoded sample rate has no effect on that track. Active band changes, preset changes and bypass transitions crossfade over 20 ms of audio. Device buffering adds to the time before a change reaches the speakers.
+
+Positive bands automatically reserve fixed headroom for the combined boost. Overlapping boosts can therefore play quieter than in earlier versions. A flat curve and cuts alone reserve 0 dB. **Output trim** adds 0 to −24 dB of attenuation and applies in bypass too. **Reset** clears the bands, trim and peak warning. Volume and mute act after the EQ and ramp over 20 ms. These preferences carry across tracks in the current session.
+
+A transient can still exceed full scale. **Output over 0 dBFS · Clear** appears when a sample sent to the device exceeds ±1. Lower the trim, clear the warning and replay the passage to check it. The player uses static gain and preserves the floating-point waveform through this stage. The main window's RMS, peak and spectrum continue to describe the source file.
 
 ## Architecture
 
@@ -55,20 +59,24 @@ WPF starts the application through `App.xaml` and opens `MainWindow`. The window
 | [SongFile](SongFile.cs) | Stores the file path, display metadata, artwork, and tempo estimate. Notifies WPF bindings when artwork or tempo information changes. |
 | [AudioPlaybackService](Services/AudioPlaybackService.cs) | Owns the decoder, EQ provider, and output device. Exposes transport, position, duration, volume, and EQ controls and raises events for media open, end, and failure. |
 | [EqualizerSampleProvider](Services/EqualizerSampleProvider.cs) | Implements NAudio's `ISampleProvider` to apply per-channel filters and headroom attenuation to decoded samples. |
+| [GraphicEqualizerDesign](Services/GraphicEqualizerDesign.cs) | Calculates sample-rate-specific peaking coefficients and a bound on combined boost. The render thread owns the filter delay lines. |
 | [AudioAnalysisService](Services/AudioAnalysisService.cs) | Reads metadata with TagLibSharp and decodes source audio independently for waveform, frequency, level, and tempo analysis. Manages the waveform and tempo caches. |
 | [MusicLibraryLogic](Services/MusicLibraryLogic.cs) and [PlaybackQueue](Services/PlaybackQueue.cs) | Implement folder discovery, filename matching, and visible-list navigation independently of WPF controls and audio hardware. |
 | [EqualizerWindow](EqualizerWindow.xaml.cs) | Uses the same playback service as the main window to edit band gains and apply presets. |
 
 ```mermaid
 flowchart TD
-    File["Local MP3 or WAV"] --> Reader["AudioFileReader: decode, volume, mute"]
-    File --> Analysis["AudioAnalysisService: independent source analysis"]
-    Reader --> EQ["EqualizerSampleProvider: filters and headroom"]
-    EQ --> Output["NAudio WaveOut"]
-    Analysis --> UI["MainWindow: waveform, BPM, frequency, and levels"]
+    File["Local MP3 or WAV"] --> Reader["AudioFileReader at unity gain"]
+    File --> Analysis["Independent source analysis"]
+    Reader --> EQ["Per-channel EQ and headroom"]
+    EQ --> Level["Output trim, volume and mute"]
+    Level --> Output["Float PCM to WaveOut"]
+    Analysis --> UI["Waveform, BPM, frequency and levels"]
 ```
 
-`AudioPlaybackService` owns the playback path from `AudioFileReader` through `EqualizerSampleProvider` to `WaveOut`. `MainWindow` sends playback and seek commands through the service and responds to its events. The analysis path uses separate readers, so it measures the source before playback volume, mute, and EQ are applied.
+`AudioFileReader` uses Windows Media Foundation for MP3. For WAV it opens a `WaveFileReader` and uses an ACM conversion for supported compressed WAV codecs. The DSP receives interleaved 32-bit IEEE float PCM at the decoder's sample rate and channel count. Tests verify 8-, 16-, 24- and 32-bit integer WAV and 32-bit float WAV. Each non-flat filter uses double-precision coefficients and state. At unity output level, settled flat EQ and bypass pass finite float samples exactly.
+
+`ToWaveProvider()` exposes the float samples as bytes for event-driven WinMM `WaveOut` on the default Windows output. NAudio 3.3.0 defaults to two 100 ms buffers. MusicPlayer requests the decoder format without an application resampler or channel mixer. Device acceptance, Windows mixing and the physical endpoint determine the final output. Seeking resets filter history at the next decoded block. Audio already queued at the device can still be heard.
 
 ## Technologies
 
@@ -101,7 +109,7 @@ The tests use deterministic WAVs, in-memory sample providers, temporary music fo
 
 The launcher collects Release coverage into a fresh directory under `TestResults/local/`, keeps the TRX and Cobertura XML, generates `coverage-report/index.html` and opens it in the default browser. Use `-NoOpen` on a headless runner. ReportGenerator must be on PATH or installable as a global .NET tool. Initial dependency and tool installation requires access to a package source. Both results directories are ignored by Git.
 
-The November 25, 2026 Release run passed 152 tests. ReportGenerator measured **87.5% production line coverage** (1,228/1,403) and **80.8% production branch coverage** (459/568) from Coverlet's Cobertura XML. The scope includes the entire `MusicPlayer` assembly, including both WPF windows and instrumented XAML. The separate service line subtotal was 564/576 (97.92%). Native device playback, end-to-end MP3 decoding, interactive dialogs and artwork downloads remain outside the suite. [Coverage audit](tests/COVERAGE.md)
+The audio-engine Release run passed **190 tests**. ReportGenerator measured **88.68% production line coverage** (1,386/1,563) and **82.71% branch coverage** (531/642), including the WPF windows and instrumented XAML. The fresh baseline was 152 passing tests, 87.53% lines and 80.81% branches. DSP tests compare measured impulse responses with an independent analytical cascade, measure a settled sine residual, and exercise preset changes, stereo frame boundaries, overloads and seek resets. Physical output and listening remain manual checks. [Audio engineering report](AUDIO_ENGINE_REPORT.md) · [Earlier coverage audit](tests/COVERAGE.md)
 
 ## Continuous integration
 

@@ -139,12 +139,16 @@ The application already includes local MP3/WAV playback, a searchable folder-bas
 
 **Goal:** Make aggressive EQ settings less likely to distort the output.
 
-- [ ] Add a user-adjustable preamp/output-gain control.
-- [ ] Meter the post-EQ signal, including sample peak and clipping indicators.
-- [ ] Introduce coefficient smoothing or crossfading to reduce clicks during slider changes.
-- [ ] Evaluate and implement an appropriate limiter or safe gain stage, with documented latency and tradeoffs.
-- [ ] Test boosted overlapping bands, low-volume passages, silent files, and rapid preset switching.
-- [ ] Keep the audio callback free of expensive UI and disk work.
+- [x] Add user-adjustable output trim from −24 to 0 dB.
+- [x] Indicate post-volume sample peaks over 0 dBFS and allow the user to clear the warning.
+- [ ] Add a continuous numerical sample-peak meter.
+- [x] Crossfade fixed filter settings over 20 ms on slider, preset and bypass changes.
+- [x] Reserve static headroom for overlapping boosts. Document the transient limitation and validate manual trim.
+- [x] Test boosted overlapping bands, low-volume passages, silence and rapid preset switching.
+- [x] Move curve design and UI work outside the render loop.
+- [ ] Measure native device underruns and file-read stalls across devices. Evaluate read-ahead or an optional limiter if measurements justify either.
+
+The hardware-free measurements, compatibility decisions and outstanding listening checks are in the [audio engineering report](AUDIO_ENGINE_REPORT.md).
 
 **Done when:** Normal and boosted presets remain stable, clipping is visible, and changing bands does not cause obvious clicks.
 

@@ -70,7 +70,7 @@ public class EqualizerTests
         const int rate = 16000;
         float[] input = TestAudioFactory.GenerateSineWave(1000, 0.5, rate);
         var eq = new EqualizerSampleProvider(new ArraySampleProvider(input, rate, 1));
-        eq.SetBandGain(9, float.NegativeInfinity);
+        eq.SetBandGain(9, -12);
         float[] output = ReadAll(eq, input.Length);
         for (int i = 0; i < input.Length; i++)
             Assert.InRange(Math.Abs(output[i] - input[i]), 0, 1e-5f);
@@ -390,46 +390,5 @@ public class EqualizerTests
 
         return Math.Sqrt(
             sumSquares / (output.Length - start));
-    }
-
-    // ==================================================
-    // IN-MEMORY AUDIO SOURCE
-    // ==================================================
-
-    /// <summary>
-    /// Supplies existing float samples to NAudio.
-    ///
-    /// No audio device or WAV file is required.
-    /// </summary>
-    private sealed class ArraySampleProvider : ISampleProvider
-    {
-        private readonly float[] _samples;
-        private int _position;
-
-        public WaveFormat WaveFormat { get; }
-
-        public ArraySampleProvider(
-            float[] samples,
-            int sampleRate,
-            int channels)
-        {
-            _samples = samples;
-
-            WaveFormat =
-                WaveFormat.CreateIeeeFloatWaveFormat(
-                    sampleRate, channels);
-        }
-
-        public int Read(Span<float> buffer)
-        {
-            int available = _samples.Length - _position;
-            int count = Math.Min(buffer.Length, available);
-
-            _samples.AsSpan(_position, count).CopyTo(buffer);
-
-            _position += count;
-
-            return count;
-        }
     }
 }

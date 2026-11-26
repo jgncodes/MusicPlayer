@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace MusicPlayer;
 
@@ -49,8 +50,21 @@ public partial class EqualizerWindow : Window
                 isFlat = false;
         }
 
-        // The equalizer is always enabled.
-        _player.SetEqualizerEnabled(true);
+        BypassBox.IsChecked = !_player.EqualizerEnabled;
+        BypassBox.Checked += (_, _) => _player.SetEqualizerEnabled(false);
+        BypassBox.Unchecked += (_, _) => _player.SetEqualizerEnabled(true);
+        TrimSlider.Value = _player.OutputTrimDb;
+        TrimValue.Text = $"{TrimSlider.Value:0} dB";
+        TrimSlider.ValueChanged += (_, e) =>
+        {
+            _player.OutputTrimDb = (float)e.NewValue;
+            TrimValue.Text = $"{e.NewValue:0} dB";
+        };
+        var peakTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        peakTimer.Tick += (_, _) => RefreshPeakWarning();
+        Loaded += (_, _) => { RefreshPeakWarning(); peakTimer.Start(); };
+        Closed += (_, _) => peakTimer.Stop();
+        PeakWarning.Click += (_, _) => { _player.ClearOverload(); RefreshPeakWarning(); };
 
         // Show Flat if all gains are zero; otherwise show Custom.
         PresetBox.SelectedIndex = isFlat ? 1 : 0;
@@ -172,6 +186,9 @@ public partial class EqualizerWindow : Window
         }
     }
 
+    private void RefreshPeakWarning() =>
+        PeakWarning.Visibility = _player.OutputOverloaded ? Visibility.Visible : Visibility.Hidden;
+
     private void UpdateValueLabels()
     {
         for (int i = 0; i < _sliders.Length; i++)
@@ -207,9 +224,9 @@ public partial class EqualizerWindow : Window
             for (int i = 0; i < _sliders.Length; i++)
             {
                 _sliders[i].Value = gains[i];
-                _player.SetBandGain(i, gains[i]);
             }
 
+            _player.SetPreset(gains);
             UpdateValueLabels();
         }
         finally
@@ -223,6 +240,9 @@ public partial class EqualizerWindow : Window
         RoutedEventArgs e)
     {
         ApplyPreset(Presets[0]);
+        TrimSlider.Value = 0;
+        _player.ClearOverload();
+        RefreshPeakWarning();
         PresetBox.SelectedIndex = 1;
     }
 }

@@ -500,9 +500,9 @@ public partial class MainWindow : Window
         if (!_mediaReady)
             return;
 
-        _player.Play();
         _isPlaying = true;
         _playWhenOpened = false;
+        _player.Play();
         UpdatePlayIcon();
     }
 

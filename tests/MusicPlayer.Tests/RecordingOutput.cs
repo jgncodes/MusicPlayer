@@ -7,8 +7,11 @@ namespace MusicPlayer.Tests;
 internal sealed class RecordingOutput : IWavePlayer
 {
     internal IWaveProvider Source { get; private set; } = null!;
-    internal bool Disposed { get; private set; }
+    internal bool Disposed => DisposeCount > 0;
+    internal int DisposeCount { get; private set; }
     internal Exception? InitError { get; init; }
+    internal Action<IWaveProvider>? OnInit { get; init; }
+    internal string? FailingCommand { get; set; }
     public PlaybackState PlaybackState { get; private set; }
     public WaveFormat OutputWaveFormat => Source.WaveFormat;
     public float Volume { get; set; }
@@ -19,20 +22,28 @@ internal sealed class RecordingOutput : IWavePlayer
         if (InitError != null)
             throw InitError;
         Source = provider;
+        OnInit?.Invoke(provider);
     }
 
-    public void Play() => PlaybackState = PlaybackState.Playing;
-    public void Pause() => PlaybackState = PlaybackState.Paused;
+    public void Play() { CheckCommand(nameof(Play)); PlaybackState = PlaybackState.Playing; }
+    public void Pause() { CheckCommand(nameof(Pause)); PlaybackState = PlaybackState.Paused; }
     internal bool CompleteStopImmediately { get; init; }
     public void Stop()
     {
+        CheckCommand(nameof(Stop));
         if (PlaybackState == PlaybackState.Stopped)
             return;
         PlaybackState = PlaybackState.Stopped;
         if (CompleteStopImmediately)
             NotifyStopped();
     }
-    public void Dispose() => Disposed = true;
+    public void Dispose() => DisposeCount++;
+
+    private void CheckCommand(string command)
+    {
+        if (FailingCommand == command)
+            throw new InvalidOperationException(command);
+    }
 
     internal void NotifyStopped(Exception? error = null)
     {

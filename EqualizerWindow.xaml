@@ -179,7 +179,6 @@
     </Window.Resources>
 
     <Grid Margin="18">
-        <!-- CHANGE 4: Five content rows with NO row for an Enabled checkbox. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Title -->
             <RowDefinition Height="Auto"/>  <!-- Preset and Reset -->
@@ -188,7 +187,6 @@
             <RowDefinition Height="Auto"/>  <!-- Frequency footer -->
         </Grid.RowDefinitions>
 
-        <!-- CHANGE 5: Title only. Removed subtitle and Enabled checkbox. -->
         <TextBlock Grid.Row="0"
                    Text="Graphic Equalizer"
                    FontSize="19"
@@ -230,7 +228,7 @@
         <Grid Grid.Row="2" Margin="0,0,0,8">
             <TextBlock Text="+12 dB" FontSize="10"
                        Foreground="#9EB3CD" HorizontalAlignment="Left"/>
-            <TextBlock Text="GAIN" FontSize="10"
+            <TextBlock Text="Boosted bands reserve headroom automatically" FontSize="11"
                        Foreground="#9EB3CD" HorizontalAlignment="Right"/>
         </Grid>
 
@@ -239,11 +237,17 @@
         <UniformGrid x:Name="BandsPanel" Grid.Row="3"
                      Columns="10" Rows="1"/>
 
-        <TextBlock Grid.Row="4"
-                   Text="Frequency bands — Hz"
-                   FontSize="11"
-                   Foreground="#91A8C4"
-                   HorizontalAlignment="Center"
-                   Margin="0,10,0,0"/>
+        <DockPanel Grid.Row="4" Margin="0,12,0,0" LastChildFill="False">
+            <CheckBox x:Name="BypassBox" Content="Bypass EQ" Foreground="White"
+                      VerticalAlignment="Center" Margin="0,0,20,0"/>
+            <TextBlock Text="Output trim" VerticalAlignment="Center"/>
+            <Slider x:Name="TrimSlider" Minimum="-24" Maximum="0" Value="0" Width="120"
+                    Margin="8,0" IsSnapToTickEnabled="True" TickFrequency="1"
+                    AutomationProperties.Name="Output trim in decibels"/>
+            <TextBlock x:Name="TrimValue" VerticalAlignment="Center"/>
+            <Button x:Name="PeakWarning" DockPanel.Dock="Right" Padding="8,3"
+                    Content="Output over 0 dBFS · Clear" Visibility="Hidden"
+                    ToolTip="A post-volume sample exceeded full scale. Reduce output trim."/>
+        </DockPanel>
     </Grid>
 </Window>

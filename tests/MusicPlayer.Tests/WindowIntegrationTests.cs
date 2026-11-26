@@ -172,10 +172,20 @@ public class WindowIntegrationTests
     {
         var player = new AudioPlaybackService();
         player.SetBandGain(3, 4);
+        player.SetEqualizerEnabled(false);
+        player.OutputTrimDb = -5;
         var window = new EqualizerWindow(player);
         try
         {
             Assert.Equal(0, window.PresetBox.SelectedIndex);
+            Assert.True(window.BypassBox.IsChecked);
+            Assert.False(player.EqualizerEnabled);
+            window.BypassBox.IsChecked = false;
+            Assert.True(player.EqualizerEnabled);
+            window.BypassBox.IsChecked = true;
+            Assert.Equal(-5, window.TrimSlider.Value);
+            window.TrimSlider.Value = -8;
+            Assert.Equal(-8f, player.OutputTrimDb);
             var cards = window.BandsPanel.Children.Cast<Grid>().ToArray();
             Assert.Equal(10, cards.Length);
             Slider Band(int index) => (Slider)((Border)cards[index].Children[1]).Child;
@@ -189,6 +199,8 @@ public class WindowIntegrationTests
             var row = (Grid)window.PresetBox.Parent;
             Click(row.Children.OfType<Button>().Single(button => Equals(button.Content, "Reset")));
             Assert.Equal(1, window.PresetBox.SelectedIndex);
+            Assert.Equal(0f, player.OutputTrimDb);
+            Assert.False(player.EqualizerEnabled);
             Assert.All(Enumerable.Range(0, 10), i =>
             {
                 Assert.Equal(0, Band(i).Value);
@@ -200,6 +212,27 @@ public class WindowIntegrationTests
     });
 
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+    [Fact]
+    public Task EqualizerDisplaysAndClearsPostVolumeOverload() => WpfTestThread.Run(() =>
+    {
+        using var wav = new TemporaryWavFile([1.25f, -1.25f]);
+        var device = new RecordingOutput();
+        var player = new AudioPlaybackService(() => device, a => a());
+        var window = new EqualizerWindow(player);
+        try
+        {
+            player.Open(new Uri(wav.FilePath));
+            Assert.Equal(8, device.Source.Read(new byte[8]));
+            window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            Assert.Equal(Visibility.Visible, window.PeakWarning.Visibility);
+            Click(window.PeakWarning);
+            Assert.False(player.OutputOverloaded);
+            Assert.Equal(Visibility.Hidden, window.PeakWarning.Visibility);
+        }
+        finally { window.Close(); player.Close(); }
+        return Task.CompletedTask;
+    });
 
     private static void WriteTrack(string folder, string name, float[] samples)
     {
