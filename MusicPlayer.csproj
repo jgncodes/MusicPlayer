@@ -15,7 +15,8 @@
 
   <!-- Exclude test files from the application build -->
   <ItemGroup>
-      <Compile Remove="tests/**/*.cs" />
+    <Compile Remove="tests/**/*.cs" />
+    <InternalsVisibleTo Include="MusicPlayer.Tests" />
   </ItemGroup>
 
 </Project>

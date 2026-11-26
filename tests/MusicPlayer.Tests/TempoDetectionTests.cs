@@ -37,7 +37,8 @@ public class TempoDetectionTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         // Act
         TempoEstimate? result = service.EstimateTempo(
@@ -65,7 +66,8 @@ public class TempoDetectionTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         TempoEstimate? result = service.EstimateTempo(
             file.FilePath,
@@ -96,7 +98,8 @@ public class TempoDetectionTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         // Act: use the real BPM estimator.
         TempoEstimate? result = service.EstimateTempo(
@@ -152,7 +155,8 @@ public class TempoDetectionTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         using var cancellation = new CancellationTokenSource();
 
@@ -180,7 +184,8 @@ public class TempoDetectionTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         // The first call performs analysis.
         TempoEstimate? first = service.EstimateTempo(

@@ -268,6 +268,13 @@ public class PlaybackQueueTests
     // -----------------------------------------------
 
     [Fact]
+    public void ManualNext_LargeQueue_WrapsWithoutIntegerOverflow()
+    {
+        Assert.Equal(0, PlaybackQueue.GetNextIndex(int.MaxValue, int.MaxValue - 1,
+            1, false, false, new Random(1)));
+    }
+
+    [Fact]
     public void NegativeQueueSize_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
@@ -289,12 +296,13 @@ public class PlaybackQueueTests
     {
         var firstRandom = new Random(42);
         var secondRandom = new Random(42);
+        int firstIndex = 4, secondIndex = 4;
 
         for (int i = 0; i < 20; i++)
         {
             int? first = PlaybackQueue.GetNextIndex(
                 count: 10,
-                currentIndex: 4,
+                currentIndex: firstIndex,
                 direction: 1,
                 shuffle: true,
                 fromSongEnd: false,
@@ -302,13 +310,17 @@ public class PlaybackQueueTests
 
             int? second = PlaybackQueue.GetNextIndex(
                 count: 10,
-                currentIndex: 4,
+                currentIndex: secondIndex,
                 direction: 1,
                 shuffle: true,
                 fromSongEnd: false,
                 random: secondRandom);
 
+            Assert.NotNull(first);
+            Assert.NotEqual(firstIndex, first.Value);
             Assert.Equal(first, second);
+            firstIndex = first.Value;
+            secondIndex = second!.Value;
         }
     }
 }

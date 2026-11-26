@@ -18,7 +18,10 @@ public sealed class PlaybackErrorEventArgs : EventArgs
 
 public sealed class AudioPlaybackService
 {
-    private WaveOut? _output;
+    private readonly Func<IWavePlayer> _createOutput;
+    private readonly Action<Action> _dispatch;
+    private IWavePlayer? _output;
+
     private AudioFileReader? _reader;
     private EqualizerSampleProvider? _equalizer;
 
@@ -28,6 +31,17 @@ public sealed class AudioPlaybackService
 
     private readonly float[] _eqGains =
         new float[EqualizerSampleProvider.BandCount];
+
+    public AudioPlaybackService()
+        : this(() => new WaveOut(), action => Application.Current?.Dispatcher.BeginInvoke(action))
+    {
+    }
+
+    internal AudioPlaybackService(Func<IWavePlayer> createOutput, Action<Action> dispatch)
+    {
+        _createOutput = createOutput;
+        _dispatch = dispatch;
+    }
 
     public event EventHandler? MediaOpened;
     public event EventHandler? MediaEnded;
@@ -84,7 +98,7 @@ public sealed class AudioPlaybackService
         if (band < 0 || band >= _eqGains.Length)
             throw new ArgumentOutOfRangeException(nameof(band));
 
-        float gain = Math.Clamp(gainDb, -12f, 12f);
+        float gain = EqualizerSampleProvider.ClampGain(gainDb);
 
         _eqGains[band] = gain;
         _equalizer?.SetBandGain(band, gain);
@@ -109,22 +123,21 @@ public sealed class AudioPlaybackService
         try
         {
             AudioFileReader reader = new(uri.LocalPath);
-            EqualizerSampleProvider equalizer = new(reader);
-
-            for (int i = 0; i < _eqGains.Length; i++)
-                equalizer.SetBandGain(i, _eqGains[i]);
-
-            equalizer.SetEnabled(_eqEnabled);
-            WaveOut output = new();
-
+            EqualizerSampleProvider equalizer;
+            IWavePlayer? output = null;
             try
             {
-                // Connect: decoder -> equalizer -> audio output.
+                equalizer = new(reader);
+                for (int i = 0; i < _eqGains.Length; i++)
+                    equalizer.SetBandGain(i, _eqGains[i]);
+
+                equalizer.SetEnabled(_eqEnabled);
+                output = _createOutput();
                 output.Init(equalizer.ToWaveProvider());
             }
             catch
             {
-                output.Dispose();
+                output?.Dispose();
                 reader.Dispose();
                 throw;
             }
@@ -146,24 +159,23 @@ public sealed class AudioPlaybackService
                 }
 
                 // Return to the WPF UI thread before invoking events.
-                Application.Current?.Dispatcher.BeginInvoke(
-                    new Action(() =>
-                    {
-                        if (!ReferenceEquals(_output, output))
-                            return;
+                _dispatch(() =>
+                {
+                    if (!ReferenceEquals(_output, output))
+                        return;
 
-                        if (args.Exception != null)
-                        {
-                            MediaFailed?.Invoke(
-                                this,
-                                new PlaybackErrorEventArgs(
-                                    args.Exception));
-                        }
-                        else if (reader.Position >= reader.Length)
-                        {
-                            MediaEnded?.Invoke(this, EventArgs.Empty);
-                        }
-                    }));
+                    if (args.Exception != null)
+                    {
+                        MediaFailed?.Invoke(
+                            this,
+                            new PlaybackErrorEventArgs(
+                                args.Exception));
+                    }
+                    else if (reader.Position >= reader.Length)
+                    {
+                        MediaEnded?.Invoke(this, EventArgs.Empty);
+                    }
+                });
             };
 
             // Notify MainWindow that the file is ready.
@@ -185,7 +197,7 @@ public sealed class AudioPlaybackService
 
     public void Close()
     {
-        WaveOut? oldOutput = _output;
+        IWavePlayer? oldOutput = _output;
         AudioFileReader? oldReader = _reader;
 
         _output = null;

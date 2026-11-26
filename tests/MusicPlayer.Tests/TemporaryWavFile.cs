@@ -14,7 +14,7 @@ public sealed class TemporaryWavFile : IDisposable
 
     public TemporaryWavFile(
         float[] samples,
-        int sampleRate = 44100)
+        int sampleRate = 44100, int channels = 1)
     {
         ArgumentNullException.ThrowIfNull(samples);
 
@@ -25,10 +25,10 @@ public sealed class TemporaryWavFile : IDisposable
             Path.GetTempPath(),
             $"MusicPlayerTest_{Guid.NewGuid():N}.wav");
 
-        // Use mono, 32-bit floating-point audio.
+        // Samples are interleaved for multichannel fixtures.
         WaveFormat format =
             WaveFormat.CreateIeeeFloatWaveFormat(
-                sampleRate, 1);
+                sampleRate, channels);
 
         using var writer =
             new WaveFileWriter(FilePath, format);

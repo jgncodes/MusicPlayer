@@ -78,6 +78,6 @@ public static class PlaybackQueue
             return direction > 0 ? 0 : count - 1;
 
         // Wrap around when navigating manually.
-        return (currentIndex + direction + count) % count;
+        return (int)(((long)currentIndex + direction + count) % count);
     }
 }

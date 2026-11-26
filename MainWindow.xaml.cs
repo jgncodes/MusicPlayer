@@ -26,17 +26,17 @@ public partial class MainWindow : Window
     };
     private const int MaxArtworkBytes = 5 * 1024 * 1024;
 
-    private readonly AudioPlaybackService _player = new();
-    private readonly AudioAnalysisService _analysis = new();
+    private readonly AudioPlaybackService _player;
+    private readonly AudioAnalysisService _analysis;
+    private readonly Action<string> _showError;
     private readonly Random _random = new();
     private readonly DispatcherTimer _seekTimer = new()
     {
         Interval = TimeSpan.FromMilliseconds(50)
     };
 
-    private readonly string _settingsDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "MusicPlayer");
+    private string SettingsDirectory => _analysis.DataDirectory;
+    internal Task CurrentSongAnalysis { get; private set; } = Task.CompletedTask;
 
     private List<SongFile> _songs = new();
     private List<SongFile> _visibleSongs = new();
@@ -63,8 +63,15 @@ public partial class MainWindow : Window
     private bool _draggingSeekSlider;
     private double _songDurationSeconds;
 
-    public MainWindow()
+    public MainWindow() : this(new AudioPlaybackService(), new AudioAnalysisService()) { }
+
+    internal MainWindow(AudioPlaybackService player, AudioAnalysisService analysis,
+        Action<string>? showError = null)
     {
+        _player = player;
+        _analysis = analysis;
+        _showError = showError ?? (message => MessageBox.Show(this, message, "MusicPlayer",
+            MessageBoxButton.OK, MessageBoxImage.Warning));
         InitializeComponent();
         _windowReady = true;
 
@@ -160,7 +167,7 @@ public partial class MainWindow : Window
 
         try
         {
-            Directory.CreateDirectory(_settingsDirectory);
+            Directory.CreateDirectory(SettingsDirectory);
             File.WriteAllText(DefaultFolderSettingsFile, dialog.FolderName);
         }
         catch (IOException ex) { ShowError(ex.Message); }
@@ -180,7 +187,7 @@ public partial class MainWindow : Window
     }
 
     private string DefaultFolderSettingsFile =>
-        Path.Combine(_settingsDirectory, "default-folder.txt");
+        Path.Combine(SettingsDirectory, "default-folder.txt");
 
     private void LoadDefaultFolder()
     {
@@ -422,7 +429,7 @@ public partial class MainWindow : Window
     private static void SaveArtwork(SongFile song, byte[] bytes)
     {
         BitmapImage bitmap = SongFile.DecodeArtwork(bytes);
-        string path = SongFile.GetArtworkPath(song.FullPath);
+        string path = song.ArtworkPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
         PngBitmapEncoder encoder = new();
@@ -467,9 +474,8 @@ public partial class MainWindow : Window
         _player.Open(new Uri(song.FullPath, UriKind.Absolute));
 
         // Step 4: decode the song asynchronously, without stopping playback.
-        _ = LoadWaveformAsync(song);
-        _ = LoadFrequencyAsync(song);
-        _ = LoadTempoAsync(song);
+        CurrentSongAnalysis = Task.WhenAll(
+            LoadWaveformAsync(song), LoadFrequencyAsync(song), LoadTempoAsync(song));
     }
 
     private void PlayPause_Click(object sender, RoutedEventArgs e)
@@ -1068,8 +1074,7 @@ public partial class MainWindow : Window
 
     private void ShowError(string message)
     {
-        MessageBox.Show(this, message, "MusicPlayer",
-            MessageBoxButton.OK, MessageBoxImage.Warning);
+        _showError(message);
     }
 
     protected override void OnClosed(EventArgs e)

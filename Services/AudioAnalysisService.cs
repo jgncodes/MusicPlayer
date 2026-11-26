@@ -39,6 +39,13 @@ public sealed record FrequencyAnalysis(
 public sealed class AudioAnalysisService
 {
     private const int WaveformBins = 400;
+    internal static string DefaultDataDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MusicPlayer");
+    internal string DataDirectory { get; }
+
+    public AudioAnalysisService() : this(DefaultDataDirectory) { }
+
+    internal AudioAnalysisService(string dataDirectory) => DataDirectory = dataDirectory;
 
     // Existing step 2 behavior: read tags and technical audio properties.
     public AudioMetadata ReadMetadata(string fullPath)
@@ -86,10 +93,15 @@ public sealed class AudioAnalysisService
     // signal analysis method 
     public FrequencyAnalysis AnalyzeSignal(string fullPath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var reader = new AudioFileReader(fullPath);
+        return AnalyzeSignal(reader, cancellationToken);
+    }
+
+    internal static FrequencyAnalysis AnalyzeSignal(ISampleProvider reader, CancellationToken cancellationToken)
+    {
         const int fftSize = 4096;
         const int fftPower = 12;
-
-        using var reader = new AudioFileReader(fullPath);
 
         int sampleRate = reader.WaveFormat.SampleRate;
         int channels = reader.WaveFormat.Channels;
@@ -442,7 +454,7 @@ public sealed class AudioAnalysisService
     }
 
 
-    private static string GetTempoCachePath(string fullPath)
+    private string GetTempoCachePath(string fullPath)
     {
         FileInfo file = new(fullPath);
 
@@ -454,11 +466,7 @@ public sealed class AudioAnalysisService
         byte[] hash = SHA256.HashData(
             Encoding.UTF8.GetBytes(identity));
 
-        string folder = Path.Combine(
-            Environment.GetFolderPath(
-                Environment.SpecialFolder.LocalApplicationData),
-            "MusicPlayer",
-            "Tempo");
+        string folder = Path.Combine(DataDirectory, "Tempo");
 
         return Path.Combine(
             folder,
@@ -642,16 +650,14 @@ public sealed class AudioAnalysisService
         }
     }
 
-    private static string GetWaveformCachePath(string fullPath)
+    private string GetWaveformCachePath(string fullPath)
     {
         FileInfo file = new(fullPath);
         string identity = $"{Path.GetFullPath(fullPath).ToUpperInvariant()}|" +
             $"{file.Length}|{file.LastWriteTimeUtc.Ticks}|{WaveformBins}|v1";
 
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(identity));
-        string cacheFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MusicPlayer", "Waveforms");
+        string cacheFolder = Path.Combine(DataDirectory, "Waveforms");
         return Path.Combine(cacheFolder, Convert.ToHexString(hash) + ".bin");
     }
 }

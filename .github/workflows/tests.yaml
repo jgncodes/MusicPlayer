@@ -21,6 +21,8 @@ jobs:
 
     # WPF requires Windows.
     runs-on: windows-latest
+    env:
+      MINIMUM_LINE_COVERAGE: 70
 
     steps:
 
@@ -56,8 +58,13 @@ jobs:
           --configuration Release
           --no-build
           --collect:"XPlat Code Coverage"
+          --settings tests/coverage.runsettings
           --logger "trx;LogFileName=MusicPlayer.Tests.trx"
-          --results-directory TestResults
+          --results-directory TestResults/ci
+
+      - name: Enforce production line coverage
+        shell: pwsh
+        run: ./tests/Measure-Coverage.ps1 -ResultsDirectory TestResults/ci -MinimumLinePercent $env:MINIMUM_LINE_COVERAGE
 
       # STEP 6: Save test reports and coverage files.
       # Always execute this step, including when tests fail.

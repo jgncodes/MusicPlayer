@@ -81,44 +81,31 @@ flowchart TD
 
 ## Automated testing
 
-From the repository root, run the xUnit project on Windows:
+Run the Release suite from the repository root on Windows with the .NET 10 SDK. Filter by xUnit class name to run one group.
 
 ```powershell
-dotnet test tests/MusicPlayer.Tests/MusicPlayer.Tests.csproj
+$project = 'tests/MusicPlayer.Tests/MusicPlayer.Tests.csproj'
+dotnet test $project -c Release
+dotnet test $project -c Release --filter FullyQualifiedName~PlaybackLifecycleTests
+dotnet test $project -c Release --filter FullyQualifiedName~WindowIntegrationTests
 ```
 
-The test project references the application project. `TestAudioFactory` generates deterministic silence, sine waves, beat pulses, and seeded noise. `TemporaryWavFile` writes mono floating-point WAV fixtures and deletes them on disposal. Equalizer tests use in-memory sample providers, and playback-service tests exercise state without opening an audio device. The suite runs without physical speakers or a personal music collection.
-
-| Suite | Coverage |
-| --- | --- |
-| `AudioAnalysisTests` | Silence, expected RMS and peak levels, dominant frequency bands, frame duration, and cancellation. |
-| `WaveformTests` | Bin count, silence and sine-wave amplitude, impulse location, peak bounds, cancellation, and repeatability. |
-| `TempoDetectionTests` | Silence and short clips, beat-pulse detection, rhythm-score bounds, cancellation, and repeatability. Tempo assertions allow half-time and double-time matches. |
-| `EqualizerTests` | Flat response, bypass, target-band boost and cut, stereo isolation, gain clamping, invalid bands, headroom, and format preservation. |
-| `AudioPlaybackServiceTests` | Initial and clamped volume, mute, EQ state and gains, reset, and transport and position behavior with no track loaded. |
-| `MusicLibraryTests` | Supported extensions, filename matching, sorting, empty folders, and top-level-only discovery. |
-| `PlaybackQueueTests` | Sequential navigation, wraparound, end-of-list behavior, missing current track, empty and single-track lists, seeded shuffle, and invalid arguments. |
-| `TestAudioFactoryTests` | Fixture sample counts, silence, sine RMS, repeatable noise, beat-pulse output, and invalid BPM input. |
-
-WPF interactions, actual device playback, and end-to-end MP3 playback are outside the automated suite. Synthetic beat tests check periodic signals under controlled conditions.
+The tests use deterministic WAVs, in-memory sample providers, temporary music folders and private cache directories. Playback lifecycle tests use the real decoder, equalizer and an in-memory NAudio output device. WPF tests instantiate the XAML windows on STA dispatcher threads and await analysis completion. The suite runs without speakers, a visible window, network access during tests, or a personal music folder.
 
 ## Code coverage
 
-From the repository root, run:
-
 ```powershell
 .\launch_coverage_report.ps1
+.\launch_coverage_report.ps1 -NoOpen
 ```
 
-The launcher replaces the repository's existing `TestResults/` directory, runs the test project in Release with Coverlet's **XPlat Code Coverage** collector, and looks for the resulting `coverage.cobertura.xml` files. It stops if the tests fail or coverage output is missing.
+The launcher collects Release coverage into a fresh directory under `TestResults/local/`, keeps the TRX and Cobertura XML, generates `coverage-report/index.html` and opens it in the default browser. Use `-NoOpen` on a headless runner. ReportGenerator must be on PATH or installable as a global .NET tool. Initial dependency and tool installation requires access to a package source. Both results directories are ignored by Git.
 
-The script uses `reportgenerator` from PATH or attempts to install `dotnet-reportgenerator-globaltool` globally if the command is missing. Automatic installation requires access to a NuGet source and permission to install user-level .NET tools. ReportGenerator writes HTML to `coverage-report/`, and the script opens `coverage-report/index.html` in the default browser. If PowerShell blocks the script, check the active policy with `Get-ExecutionPolicy -List` and use a session where local scripts are permitted.
+The November 25, 2026 Release run passed 152 tests. Coverlet measured **87.53% production line coverage** (1,228/1,403), **80.88% branch coverage** (461/570) and **97.92% service line coverage** (564/576). The denominator includes every instrumented line in `MusicPlayer`, including both WPF code-behind files and XAML source mappings. Native device playback, end-to-end MP3 decoding, interactive dialogs and artwork downloads remain outside the suite. The audit records the original baseline, per-file measurements, test changes and validation commands. [Coverage audit](tests/COVERAGE.md)
 
 ## Continuous integration
 
-[MusicPlayer CI](.github/workflows/tests.yaml) runs on pushes and pull requests using GitHub Actions on `windows-latest`. It checks out the repository, sets up the .NET SDK from the `10.0.x` channel, restores the test project and its app reference, builds both in Release, and runs the tests without rebuilding.
-
-The test step writes a TRX log and collects Cobertura XML. The workflow attempts to upload `TestResults/` as the **musicplayer-test-results** artifact even when tests fail. When generated, the artifact contains `MusicPlayer.Tests.trx` and coverage XML and is retained for 14 days. HTML coverage is generated by the local launcher.
+The Windows workflow restores dependencies, builds the app and tests in Release, and runs the full xUnit suite. CI and the local launcher use `tests/coverage.runsettings`. CI checks the unrounded production line fraction against `MINIMUM_LINE_COVERAGE` (70). A failed test, missing report or coverage below the threshold fails the job. The `musicplayer-test-results` artifact retains TRX and Cobertura output for 14 days, including available results from failed runs. [GitHub Actions workflow](.github/workflows/tests.yaml)
 
 ## Project structure
 

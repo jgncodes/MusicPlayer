@@ -22,6 +22,7 @@ public sealed class EqualizerSampleProvider : ISampleProvider
     private readonly bool[] _activeBands = new bool[BandCount];
     private readonly object _sync = new();
 
+    private int _nextChannel;
     private bool _enabled = true;
     private float _outputGain = 1f;
 
@@ -66,7 +67,7 @@ public sealed class EqualizerSampleProvider : ISampleProvider
 
         lock (_sync)
         {
-            _gains[band] = Math.Clamp(gainDb, -12f, 12f);
+            _gains[band] = ClampGain(gainDb);
 
             if (_activeBands[band])
             {
@@ -84,6 +85,14 @@ public sealed class EqualizerSampleProvider : ISampleProvider
 
             UpdateHeadroom();
         }
+    }
+
+    internal static float ClampGain(float gainDb)
+    {
+        if (float.IsNaN(gainDb))
+            throw new ArgumentOutOfRangeException(nameof(gainDb));
+
+        return Math.Clamp(gainDb, -12f, 12f);
     }
 
     public void SetEnabled(bool enabled)
@@ -110,14 +119,16 @@ public sealed class EqualizerSampleProvider : ISampleProvider
         {
             int samplesRead = _source.Read(buffer);
 
+            int channels = WaveFormat.Channels;
+            int channel = _nextChannel;
+            _nextChannel = (int)(((long)channel + samplesRead) % channels);
+
             if (!_enabled)
                 return samplesRead;
 
-            int channels = WaveFormat.Channels;
-
             for (int i = 0; i < samplesRead; i++)
             {
-                int channel = i % channels;
+
                 float sample = buffer[i];
 
                 for (int band = 0; band < BandCount; band++)
@@ -130,6 +141,7 @@ public sealed class EqualizerSampleProvider : ISampleProvider
                 }
 
                 buffer[i] = sample * _outputGain;
+                channel = (channel + 1) % channels;
             }
 
             return samplesRead;

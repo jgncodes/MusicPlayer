@@ -236,15 +236,17 @@ public class AudioPlaybackServiceTests
     {
         var player = new AudioPlaybackService();
 
-        // No audio device should be initialized here.
-        Exception? exception = Record.Exception(() =>
-        {
-            player.Play();
-            player.Pause();
-            player.Stop();
-            player.Close();
-        });
+        int notifications = 0;
+        player.MediaOpened += (_, _) => notifications++;
+        player.MediaEnded += (_, _) => notifications++;
+        player.MediaFailed += (_, _) => notifications++;
+        player.Play();
+        player.Pause();
+        player.Stop();
+        player.Close();
 
-        Assert.Null(exception);
+        Assert.Equal(0, notifications);
+        Assert.Null(player.Duration);
+        Assert.Equal(TimeSpan.Zero, player.Position);
     }
 }

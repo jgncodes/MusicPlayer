@@ -12,6 +12,7 @@ namespace MusicPlayer;
 public class SongFile : INotifyPropertyChanged
 {
     public string FullPath { get; }
+    internal string ArtworkPath { get; }
     public string Name => Path.GetFileName(FullPath);
     public string BpmText { get; private set; } = "—";
     public string LengthText { get; private set; } = "—";
@@ -45,12 +46,12 @@ public class SongFile : INotifyPropertyChanged
             ? "BPM not analyzed"
             : "BPM from file metadata";
 
-        string imagePath = GetArtworkPath(fullPath);
-        if (File.Exists(imagePath))
+        ArtworkPath = GetArtworkPath(fullPath, analysis.DataDirectory);
+        if (File.Exists(ArtworkPath))
         {
             try
             {
-                Artwork = DecodeArtwork(File.ReadAllBytes(imagePath));
+                Artwork = DecodeArtwork(File.ReadAllBytes(ArtworkPath));
             }
             catch (Exception ex)
             {
@@ -59,13 +60,14 @@ public class SongFile : INotifyPropertyChanged
         }
     }
 
-    public static string GetArtworkPath(string songPath)
+    public static string GetArtworkPath(string songPath) =>
+        GetArtworkPath(songPath, AudioAnalysisService.DefaultDataDirectory);
+
+    private static string GetArtworkPath(string songPath, string dataDirectory)
     {
         string normalized = Path.GetFullPath(songPath).ToUpperInvariant();
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-        string folder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MusicPlayer", "Artwork");
+        string folder = Path.Combine(dataDirectory, "Artwork");
 
         return Path.Combine(folder, Convert.ToHexString(hash) + ".png");
     }

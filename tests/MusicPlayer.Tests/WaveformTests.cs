@@ -30,7 +30,8 @@ public class WaveformTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         float[] waveform = service.GenerateWaveform(
             file.FilePath,
@@ -52,7 +53,8 @@ public class WaveformTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         float[] waveform = service.GenerateWaveform(
             file.FilePath,
@@ -80,7 +82,8 @@ public class WaveformTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         float[] waveform = service.GenerateWaveform(
             file.FilePath,
@@ -111,7 +114,8 @@ public class WaveformTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         float[] waveform = service.GenerateWaveform(
             file.FilePath,
@@ -145,7 +149,8 @@ public class WaveformTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         float[] waveform = service.GenerateWaveform(
             file.FilePath,
@@ -173,7 +178,8 @@ public class WaveformTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         using var cancellation =
             new CancellationTokenSource();
@@ -201,7 +207,8 @@ public class WaveformTests
         using var file = new TemporaryWavFile(
             samples, SampleRate);
 
-        var service = new AudioAnalysisService();
+        using var cache = new TestDirectory();
+        var service = new AudioAnalysisService(cache.Path);
 
         float[] first = service.GenerateWaveform(
             file.FilePath,

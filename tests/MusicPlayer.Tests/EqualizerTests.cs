@@ -7,6 +7,75 @@ namespace MusicPlayer.Tests;
 
 public class EqualizerTests
 {
+    [Fact]
+    public void InterleavedReadsPreserveFilterHistoryAcrossOddSizedBuffers()
+    {
+        float[] input = new float[512];
+        input[0] = 0.75f;
+        var eq = new EqualizerSampleProvider(new ArraySampleProvider(input, SampleRate, 2));
+        eq.SetBandGain(5, -8);
+        float[] expected = ProcessAudio(input, channels: 2, bandIndex: 5, gainDb: -8);
+        float[] output = new float[input.Length];
+
+        for (int offset = 0; offset < input.Length; offset += 7)
+        {
+            int length = Math.Min(7, input.Length - offset);
+            Assert.Equal(length, eq.Read(output.AsSpan(offset, length)));
+        }
+
+        for (int i = 0; i < output.Length; i++)
+            Assert.InRange(Math.Abs(output[i] - expected[i]), 0, 1e-6f);
+    }
+
+    [Fact]
+    public void NaNGainIsRejectedBeforeChangingFilterOrPlaybackSettings()
+    {
+        var eq = new EqualizerSampleProvider(new ArraySampleProvider([0.5f], SampleRate, 1));
+        var player = new AudioPlaybackService();
+        player.SetBandGain(2, 5);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => eq.SetBandGain(2, float.NaN));
+        Assert.Throws<ArgumentOutOfRangeException>(() => player.SetBandGain(2, float.NaN));
+        Assert.Equal(5f, player.GetBandGain(2));
+        Assert.Equal(0.5f, Assert.Single(ReadAll(eq, 1)), 5);
+    }
+
+    [Theory]
+    [InlineData(0, 31.25)] [InlineData(1, 62.5)] [InlineData(2, 125)]
+    [InlineData(3, 250)] [InlineData(4, 500)] [InlineData(5, 1000)]
+    [InlineData(6, 2000)] [InlineData(7, 4000)] [InlineData(8, 8000)]
+    [InlineData(9, 16000)]
+    public void ChangingGainDuringStreamCutsBandCenterBySixDecibels(int band, double hz)
+    {
+        const int rate = 48000;
+        float[] input = TestAudioFactory.GenerateSineWave(hz, 0.5, rate, 1);
+        var eq = new EqualizerSampleProvider(new ArraySampleProvider(input, rate, 1));
+        float[] flat = ReadAll(eq, rate / 2);
+        eq.SetBandGain(band, -6);
+        float[] cut = ReadAll(eq, rate / 2);
+
+        // Compare settled output with the same input samples (phase independent).
+        double inputPower = 0, outputPower = 0;
+        for (int i = rate / 4; i < cut.Length; i++)
+        {
+            inputPower += Math.Pow(input[flat.Length + i], 2);
+            outputPower += Math.Pow(cut[i], 2);
+        }
+        Assert.InRange(10 * Math.Log10(outputPower / inputPower), -6.2, -5.8);
+    }
+
+    [Fact]
+    public void InactiveBandAtLowSampleRateDoesNotFilterTheSignal()
+    {
+        const int rate = 16000;
+        float[] input = TestAudioFactory.GenerateSineWave(1000, 0.5, rate);
+        var eq = new EqualizerSampleProvider(new ArraySampleProvider(input, rate, 1));
+        eq.SetBandGain(9, float.NegativeInfinity);
+        float[] output = ReadAll(eq, input.Length);
+        for (int i = 0; i < input.Length; i++)
+            Assert.InRange(Math.Abs(output[i] - input[i]), 0, 1e-5f);
+    }
+
     private const int SampleRate = 44100;
     private const double DurationSeconds = 1.0;
 
