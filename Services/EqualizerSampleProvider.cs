@@ -13,6 +13,9 @@ public sealed class EqualizerSampleProvider : ISampleProvider
     private readonly object _settingsGate = new();
     private readonly float[] _gains = new float[BandCount];
     private bool _enabled = true;
+    private EqualizerMode _mode;
+    private ParametricEqualizerSettings _parametric = ParametricEqualizerSettings.Flat;
+    private EqualizerCurve _parametricCurve = EqualizerCurve.Flat;
     private volatile EqualizerCurve _requested = EqualizerCurve.Flat;
     private volatile float _requestedLevel = 1;
     private int _overloaded;
@@ -56,7 +59,7 @@ public sealed class EqualizerSampleProvider : ISampleProvider
             if (_gains[band] == gain)
                 return;
             _gains[band] = gain;
-            if (_enabled && band < _design.ActiveBandCount)
+            if (_enabled && _mode == EqualizerMode.Graphic && band < _design.ActiveBandCount)
                 Publish();
         }
     }
@@ -70,7 +73,7 @@ public sealed class EqualizerSampleProvider : ISampleProvider
             int active = _design.ActiveBandCount;
             bool changed = !checkedGains[..active].SequenceEqual(_gains.AsSpan(0, active));
             checkedGains.CopyTo(_gains);
-            if (_enabled && changed)
+            if (_enabled && _mode == EqualizerMode.Graphic && changed)
                 Publish();
         }
     }
@@ -94,7 +97,52 @@ public sealed class EqualizerSampleProvider : ISampleProvider
         }
     }
 
-    private void Publish() => _requested = _enabled ? _design.Create(_gains) : EqualizerCurve.Flat;
+    public EqualizerMode Mode
+    {
+        get { lock (_settingsGate) return _mode; }
+        set
+        {
+            if (!Enum.IsDefined(value))
+                throw new ArgumentOutOfRangeException(nameof(value));
+            lock (_settingsGate)
+            {
+                if (_mode == value)
+                    return;
+                _mode = value;
+                Publish();
+            }
+        }
+    }
+
+    public ParametricEqualizerSettings ParametricSettings
+    {
+        get { lock (_settingsGate) return _parametric; }
+        set => ApplyParametricSettings(value, omitUnavailable: false);
+    }
+
+    internal void ApplyParametricSettings(ParametricEqualizerSettings settings, bool omitUnavailable)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        lock (_settingsGate)
+        {
+            // Design and validate before publishing any part of the edit.
+            var curve = settings.Design(WaveFormat.SampleRate, omitUnavailable);
+            _parametric = settings;
+            _parametricCurve = curve;
+            if (_enabled && _mode == EqualizerMode.Parametric)
+                _requested = curve;
+        }
+    }
+
+    public EqualizerResponse GetResponse()
+    {
+        lock (_settingsGate)
+            return new EqualizerResponse(_requested, WaveFormat.SampleRate,
+                _mode == EqualizerMode.Graphic ? BandCount : _parametric.Bands.Count, _requestedLevel);
+    }
+
+    private void Publish() => _requested = !_enabled ? EqualizerCurve.Flat :
+        _mode == EqualizerMode.Parametric ? _parametricCurve : _design.Create(_gains);
 
     internal void SetOutputLevel(float level) => _requestedLevel = level;
 
@@ -156,7 +204,14 @@ public sealed class EqualizerSampleProvider : ISampleProvider
             if (_fadePosition != 0)
                 value += (_next.Process(input, _channel) - value) * (_fadePosition / (double)_fadeFrames);
             buffer[i] = (float)(value * _level);
-            overload |= Math.Abs(buffer[i]) > 1;
+            // Float WAVs can carry samples far beyond full scale. Preserve a finite
+            // PCM representation even at its numeric limit, still latching overload.
+            if (Math.Abs(buffer[i]) > 1)
+            {
+                overload = true;
+                if (float.IsInfinity(buffer[i]))
+                    buffer[i] = float.CopySign(float.MaxValue, buffer[i]);
+            }
 
             if (++_channel == _channels)
             {

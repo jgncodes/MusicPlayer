@@ -18,6 +18,8 @@ public sealed class AudioPlaybackService
     private double _volume = 1;
     private bool _isMuted;
     private bool _eqEnabled = true;
+    private EqualizerMode _mode;
+    private ParametricEqualizerSettings _parametric = ParametricEqualizerSettings.Flat;
     private float _trimDb;
     private readonly float[] _eqGains = new float[EqualizerSampleProvider.BandCount];
 
@@ -90,6 +92,32 @@ public sealed class AudioPlaybackService
     private void ApplyLevel() => _session?.Eq.SetOutputLevel(OutputLevel);
 
     public bool EqualizerEnabled => _eqEnabled;
+    public EqualizerMode Mode
+    {
+        get => _mode;
+        set
+        {
+            if (!Enum.IsDefined(value))
+                throw new ArgumentOutOfRangeException(nameof(value));
+            if (_session is { } session)
+                session.Eq.Mode = value;
+            _mode = value;
+        }
+    }
+
+    public ParametricEqualizerSettings ParametricSettings
+    {
+        get => _parametric;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (_session is { } session)
+                session.Eq.ParametricSettings = value;
+            _parametric = value;
+        }
+    }
+
+    public EqualizerResponse? GetEqualizerResponse() => _session?.Eq.GetResponse();
     public float GetBandGain(int band) => _eqGains[band];
 
     public void SetBandGain(int band, float gainDb)
@@ -117,6 +145,7 @@ public sealed class AudioPlaybackService
     public void ResetEqualizer()
     {
         SetPreset(new float[EqualizerSampleProvider.BandCount]);
+        ParametricSettings = ParametricEqualizerSettings.Flat;
         OutputTrimDb = 0;
         ClearOverload();
     }
@@ -133,6 +162,8 @@ public sealed class AudioPlaybackService
                 var eq = new EqualizerSampleProvider(reader);
                 eq.SetEnabled(_eqEnabled);
                 eq.SetBands(_eqGains);
+                eq.ApplyParametricSettings(_parametric, omitUnavailable: true);
+                eq.Mode = _mode;
                 eq.SetOutputLevel(OutputLevel);
                 output = _createOutput();
                 output.Init(eq.ToWaveProvider());

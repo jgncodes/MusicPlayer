@@ -10,6 +10,17 @@ The application already includes local MP3/WAV playback, a searchable folder-bas
 
 ## At a glance
 
+### Equalizer milestones
+
+| Phase | Status | Deliverable |
+| --- | --- | --- |
+| 2A | Complete | Programmatic bell and shelf filters, mode switching, automatic headroom and a tested response API. See [the engineering report](PARAMETRIC_EQ_REPORT.md). |
+| 2B | Planned | Advanced EQ interface with a logarithmic frequency-response graph and editable band controls. |
+| 2C | Planned | Versioned custom presets for graphic and parametric configurations, with save, load, rename and delete. |
+| 2D | Planned | Playback output settings, endpoint selection and validation on physical devices. |
+
+### Application roadmap
+
 | Order | Feature | Approx. effort | Main engineering skills |
 | --- | --- | --- | --- |
 | 1 | Persistent playback sessions and settings | 2–4 h | JSON, lifecycle, state management |
@@ -48,7 +59,7 @@ The application already includes local MP3/WAV playback, a searchable folder-bas
 **Goal:** Allow users to save their own sound profiles.
 
 - [ ] Add **Save Preset**, **Rename**, and **Delete** controls to the equalizer window.
-- [ ] Store a preset name plus ten gain values in a JSON file.
+- [ ] Store a preset name, EQ mode and either ten graphic gains or an ordered list of parametric bands in a versioned JSON file.
 - [ ] Load presets into the existing dropdown alongside built-in presets such as Flat, Bass Boost, Vocal, and V-Shape.
 - [ ] Protect built-in presets from accidental deletion.
 - [ ] Keep **Flat** at all zero gains; Reset always restores Flat.
@@ -64,10 +75,10 @@ The application already includes local MP3/WAV playback, a searchable folder-bas
 
 - [ ] Add a compact frequency-response graph above the ten sliders.
 - [ ] Display frequency on a logarithmic x-axis and gain in dB on the y-axis.
-- [ ] Calculate the **combined response** of all active biquad filters; do not simply draw straight lines between slider values.
+- [x] Calculate individual and combined responses from the audio engine's actual biquad coefficients, with selectable gain stages.
 - [ ] Update the curve when a band or preset changes.
 - [ ] Display a flat 0 dB line when Reset is pressed.
-- [ ] Test against expected single-band boosts and cuts.
+- [x] Test the response API against single-band boosts and cuts, shelves, mixed cascades and rendered impulses.
 
 **Done when:** The graph responds immediately and correctly reflects overlapping filters.
 

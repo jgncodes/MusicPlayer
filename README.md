@@ -109,7 +109,7 @@ The tests use deterministic WAVs, in-memory sample providers, temporary music fo
 
 The launcher collects Release coverage into a fresh directory under `TestResults/local/`, keeps the TRX and Cobertura XML, generates `coverage-report/index.html` and opens it in the default browser. Use `-NoOpen` on a headless runner. ReportGenerator must be on PATH or installable as a global .NET tool. Initial dependency and tool installation requires access to a package source. Both results directories are ignored by Git.
 
-The audio-engine Release run passed **190 tests**. ReportGenerator measured **88.68% production line coverage** (1,386/1,563) and **82.71% branch coverage** (531/642), including the WPF windows and instrumented XAML. The fresh baseline was 152 passing tests, 87.53% lines and 80.81% branches. DSP tests compare measured impulse responses with an independent analytical cascade, measure a settled sine residual, and exercise preset changes, stereo frame boundaries, overloads and seek resets. Physical output and listening remain manual checks. [Audio engineering report](AUDIO_ENGINE_REPORT.md) · [Earlier coverage audit](tests/COVERAGE.md)
+The Phase 2A Release run passed **221 tests**. ReportGenerator measured **89.64% production line coverage** (1,548/1,727) and **84.52% branch coverage** (639/756), including WPF. Tests cover decoded audio, filter response, live edits, overloads and seek resets. The equalizer window provides the ten-band graphic EQ. Physical listening and endpoint compatibility remain manual checks. [Parametric DSP engineering report](PARAMETRIC_EQ_REPORT.md) · [Audio engine report](AUDIO_ENGINE_REPORT.md) · [Earlier coverage audit](tests/COVERAGE.md)
 
 ## Continuous integration
 

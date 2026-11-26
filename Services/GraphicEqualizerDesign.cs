@@ -43,7 +43,7 @@ internal sealed class GraphicEqualizerDesign
 
     internal EqualizerCurve Create(ReadOnlySpan<float> gains)
     {
-        List<PeakSection> sections = new(_bands.Length);
+        var sections = new BiquadSection?[EqualizerSampleProvider.BandCount];
         if (_bands.Length == 0)
             return EqualizerCurve.Flat;
         Span<double> upperPower = stackalloc double[_bands[0].Detuning.Length];
@@ -54,9 +54,7 @@ internal sealed class GraphicEqualizerDesign
                 continue;
             Band band = _bands[i];
             double a = Math.Pow(10, gains[i] / 40.0);
-            double a0 = 1 + band.Alpha / a;
-            sections.Add(new PeakSection((1 + band.Alpha * a) / a0, -2 * band.Cosine / a0,
-                (1 - band.Alpha * a) / a0, (1 - band.Alpha / a) / a0));
+            sections[i] = BiquadSection.Peak(band.Cosine, band.Alpha, a);
             if (gains[i] > 0)
             {
                 // Cuts have magnitude <= 1. Products of per-section maxima bound
@@ -69,61 +67,11 @@ internal sealed class GraphicEqualizerDesign
                 }
             }
         }
-        if (sections.Count == 0)
+        if (!sections.Any(s => s.HasValue))
             return EqualizerCurve.Flat;
         double peakPower = 1;
         foreach (double power in upperPower)
             peakPower = Math.Max(peakPower, power);
-        return new EqualizerCurve(sections.ToArray(), 1 / Math.Sqrt(peakPower));
-    }
-}
-
-// For a normalized cookbook peak, a1 == b1. Coefficients and delay lines are double.
-internal readonly record struct PeakSection(double B0, double B1, double B2, double A2);
-internal sealed record EqualizerCurve(PeakSection[] Sections, double Gain)
-{
-    internal static readonly EqualizerCurve Flat = new([], 1);
-}
-
-internal sealed class FilterBank(int channels)
-{
-    private struct Delay { internal double Z1, Z2; }
-    private readonly Delay[] _states = new Delay[channels * EqualizerSampleProvider.BandCount];
-    internal EqualizerCurve Curve { get; private set; } = EqualizerCurve.Flat;
-
-    internal void Start(EqualizerCurve curve)
-    {
-        Curve = curve;
-        Array.Clear(_states);
-    }
-
-    internal void TransitionFrom(FilterBank previous, EqualizerCurve curve)
-    {
-        Start(curve);
-        int shared = 0;
-        while (shared < curve.Sections.Length && shared < previous.Curve.Sections.Length &&
-               curve.Sections[shared] == previous.Curve.Sections[shared])
-            shared++;
-        // Identical upstream sections have identical inputs and histories. Keeping
-        // them avoids truncating a long bass decay when only treble changes.
-        if (shared > 0)
-        {
-            for (int offset = 0; offset < _states.Length; offset += EqualizerSampleProvider.BandCount)
-                previous._states.AsSpan(offset, shared).CopyTo(_states.AsSpan(offset, shared));
-        }
-    }
-
-    internal double Process(double sample, int channel)
-    {
-        int index = channel * EqualizerSampleProvider.BandCount;
-        foreach (var section in Curve.Sections)
-        {
-            ref Delay state = ref _states[index++];
-            double output = section.B0 * sample + state.Z1;
-            state.Z1 = section.B1 * (sample - output) + state.Z2;
-            state.Z2 = section.B2 * sample - section.A2 * output;
-            sample = output;
-        }
-        return sample * Curve.Gain;
+        return new EqualizerCurve(sections, 1 / Math.Sqrt(peakPower));
     }
 }
