@@ -1,6 +1,9 @@
 param(
     [Parameter(Mandatory)] [string] $ResultsDirectory,
-    [ValidateRange(0, 100)] [int] $MinimumLinePercent = 0
+    [ValidateRange(0, 100)] [int] $MinimumLinePercent = 0,
+    [ValidateRange(0, 100)] [int] $MinimumBranchPercent = 0,
+    [string] $ReportGeneratorPath = 'reportgenerator',
+    [string] $HtmlReportDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,10 +16,6 @@ $packages = @($coverage.packages.package)
 if ($packages.Count -ne 1 -or $packages[0].name -cne 'MusicPlayer') {
     throw 'Expected coverage for the MusicPlayer production assembly.'
 }
-$covered = [long] $coverage.'lines-covered'
-$total = [long] $coverage.'lines-valid'
-if ($total -le 0) { throw 'The report contains no measurable production lines.' }
-
 $report = foreach ($file in ($packages[0].classes.class | Group-Object filename)) {
     $lines = @($file.Group.lines.line | Group-Object number)
     $hits = @($lines | Where-Object { @($_.Group | Where-Object { [long] $_.hits -gt 0 }).Count -gt 0 })
@@ -28,8 +27,29 @@ $coreHits = ($core | Measure-Object Covered -Sum).Sum
 $coreLines = ($core | Measure-Object Lines -Sum).Sum
 if ($coreLines -le 0) { throw 'No production service files found.' }
 Write-Host ('Services: {0}/{1} lines ({2:P2})' -f $coreHits, $coreLines, ($coreHits / $coreLines))
-Write-Host ('Production: {0}/{1} lines ({2:P2}), {3}/{4} branches' -f $covered, $total,
-    ($covered / $total), $coverage.'branches-covered', $coverage.'branches-valid')
-if (100 * $covered -lt $MinimumLinePercent * $total) {
-    throw "Production line coverage is below $MinimumLinePercent%."
+
+# Generate the gate inputs with the same parser and aggregation as the HTML report.
+$reportDir = Join-Path $ResultsDirectory 'report'
+$reportTypes = 'JsonSummary'
+if ($HtmlReportDirectory) {
+    $reportDir = $HtmlReportDirectory
+    $reportTypes = 'JsonSummary;Html;TextSummary'
 }
+& $ReportGeneratorPath "-reports:$($files[0].FullName)" "-targetdir:$reportDir" "-reporttypes:$reportTypes"
+if ($LASTEXITCODE -ne 0) { throw "ReportGenerator failed with exit code $LASTEXITCODE." }
+$result = Get-Content -LiteralPath (Join-Path $reportDir 'Summary.json') -Raw | ConvertFrom-Json
+if ($result.summary.assemblies -ne 1 -or $result.coverage.assemblies[0].name -cne 'MusicPlayer') {
+    throw 'Expected a ReportGenerator summary for the MusicPlayer production assembly.'
+}
+
+function Test-CoverageMinimum($metric, $covered, $total, $minimum) {
+    if ($null -eq $covered -or $total -le 0 -or $covered -lt 0 -or $covered -gt $total) {
+        throw "Invalid $metric counters in the ReportGenerator summary."
+    }
+    Write-Host ('Production {0}: {1}/{2} ({3:P2}), minimum {4}%' -f $metric, $covered, $total, ($covered / $total), $minimum)
+    return (100L * $covered -ge [long]$minimum * $total)
+}
+$summary = $result.summary
+$linesPass = Test-CoverageMinimum 'lines' $summary.coveredlines $summary.coverablelines $MinimumLinePercent
+$branchesPass = Test-CoverageMinimum 'branches' $summary.coveredbranches $summary.totalbranches $MinimumBranchPercent
+if (-not ($linesPass -and $branchesPass)) { throw 'Production coverage is below the required minimum. See counts above.' }

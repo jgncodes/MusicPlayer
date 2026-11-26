@@ -12,11 +12,11 @@ Measured on Windows with .NET SDK 10.0.403 and runtime 10.0.14 on November 25, 2
 | Service lines | 415/564 (73.58%) | 564/576 (97.92%) |
 | Service branches | 159/250 (63.60%) | 238/254 (93.70%) |
 
-Coverlet's Cobertura root counters define the production metric. The original collector output contained one assembly, `MusicPlayer`. The checked-in settings select that same assembly and all its types. This excludes the test assembly, third-party libraries and tooling. There are no application file, namespace or attribute exclusions configured here. WPF-generated connector sequence points mapped to authored XAML stay in the denominator. Compiler infrastructure without reported source sequence points, declarations, and XAML markup without executable mappings contribute no lines. The core subtotal covers every source file under `Services/`, including the playback service's dispatch adapter. The WPF bitmap model `SongFile` is included in the overall metric and shown separately. The HTML report's class-level aggregation displays 459/568 branches. Use the original XML root counters above for comparisons and gate decisions.
+The table above records the historical Coverlet root counters. The original collector output contained one assembly, `MusicPlayer`. The checked-in settings select that same assembly and all its types. This excludes the test assembly, third-party libraries and tooling. There are no application file, namespace or attribute exclusions configured here. WPF-generated connector sequence points mapped to authored XAML stay in the denominator. Compiler infrastructure without reported source sequence points, declarations, and XAML markup without executable mappings contribute no lines. The core subtotal covers every source file under `Services/`, including the playback service's dispatch adapter. The WPF bitmap model `SongFile` is included in the overall metric and shown separately. The HTML report's class-level aggregation displays 459/568 branches. CI now compares both ReportGenerator fractions directly from its JSON summary. The minimums are 80% of production lines and 75% of production branches.
 
 ## Coverage by source file
 
-Counts show covered/coverable sequence-point lines or branches. The minimum project gate is 70%, the preferred overall line goal is 80%, and the service line goal is 90%. Individual WPF files have no quota.
+Counts show covered/coverable sequence-point lines or branches. The audit used a 70% project line gate and a 90% service line goal. Individual WPF files have no quota.
 
 | File | Baseline lines | Final lines | Baseline branches | Final branches |
 | --- | ---: | ---: | ---: | ---: |
@@ -116,10 +116,11 @@ The unsigned launcher ran under a process-scoped execution policy. `pwsh -Execut
 
 ## Remaining gaps
 
+- Artwork import has an uncovered error path worth testing. The local size check and the download's redirect, media type and size checks throw `InvalidDataException`. That exception derives from `SystemException` and escapes both handlers' catch filters, so a rejected image can bypass the intended error dialog. This finding came from reviewing the uncovered source. The gate change does not exercise the dialog.
 - The main window accounts for 161 uncovered code-behind lines. Native file/folder selection, setting or clearing the default folder through dialogs, URL entry, HTTP redirect/content/size checks, local artwork import/save, mouse hit testing and visible child-window behavior remain outside the automated paths. Actual image decoding and cached artwork loading are covered independently.
 - The suite substitutes audio output. Driver initialization, device removal, native callback scheduling, sound at the speakers and end-to-end MP3 codec behavior require separate Windows integration coverage. Real WAV decoding and the samples sent to the device are exercised.
 - Folder ACL denial, some cache-permission and cleanup failures, invalid channel/rate headers rejected by decoders, and a few estimator rejection branches remain uncovered. Tests use sharing violations and a file in place of a cache directory for repeatable I/O failures. The tempo fixtures establish behavior on synthetic audio and do not measure accuracy on commercial recordings.
-- App startup through the generated entry point and OS-driven gestures remain manual. Hidden-window tests instantiate the compiled XAML and use routed controls directly. CI enforces the production line floor. Branch and core measurements are reported separately.
+- App startup through the generated entry point and OS-driven gestures remain manual. Hidden-window tests instantiate the compiled XAML and use routed controls directly. CI enforces production line and branch floors. The service subtotal is informational.
 
 ## Working-tree revalidation
 

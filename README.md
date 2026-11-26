@@ -101,11 +101,18 @@ The tests use deterministic WAVs, in-memory sample providers, temporary music fo
 
 The launcher collects Release coverage into a fresh directory under `TestResults/local/`, keeps the TRX and Cobertura XML, generates `coverage-report/index.html` and opens it in the default browser. Use `-NoOpen` on a headless runner. ReportGenerator must be on PATH or installable as a global .NET tool. Initial dependency and tool installation requires access to a package source. Both results directories are ignored by Git.
 
-The November 25, 2026 Release run passed 152 tests. Coverlet measured **87.53% production line coverage** (1,228/1,403), **80.88% branch coverage** (461/570) and **97.92% service line coverage** (564/576). The denominator includes every instrumented line in `MusicPlayer`, including both WPF code-behind files and XAML source mappings. Native device playback, end-to-end MP3 decoding, interactive dialogs and artwork downloads remain outside the suite. The audit records the original baseline, per-file measurements, test changes and validation commands. [Coverage audit](tests/COVERAGE.md)
+The November 25, 2026 Release run passed 152 tests. ReportGenerator measured **87.5% production line coverage** (1,228/1,403) and **80.8% production branch coverage** (459/568) from Coverlet's Cobertura XML. The scope includes the entire `MusicPlayer` assembly, including both WPF windows and instrumented XAML. The separate service line subtotal was 564/576 (97.92%). Native device playback, end-to-end MP3 decoding, interactive dialogs and artwork downloads remain outside the suite. [Coverage audit](tests/COVERAGE.md)
 
 ## Continuous integration
 
-The Windows workflow restores dependencies, builds the app and tests in Release, and runs the full xUnit suite. CI and the local launcher use `tests/coverage.runsettings`. CI checks the unrounded production line fraction against `MINIMUM_LINE_COVERAGE` (70). A failed test, missing report or coverage below the threshold fails the job. The `musicplayer-test-results` artifact retains TRX and Cobertura output for 14 days, including available results from failed runs. [GitHub Actions workflow](.github/workflows/tests.yaml)
+The Windows workflow builds the application and runs the full Release xUnit suite with the same collector settings as the local launcher. CI requires **at least 80% line coverage and 75% branch coverage**. The gate uses ReportGenerator 5.6.1's integer covered and total counts from `Summary.json`. The HTML report displays rounded percentages. A failed test, missing coverage report, or either fraction falling below its minimum fails the job. The `musicplayer-test-results` artifact retains available TRX, Cobertura and gate summary files for 14 days, including on failure. Both minimums are configurable in the [workflow](.github/workflows/tests.yaml).
+
+To apply the CI gate locally after running the launcher, use PowerShell from the repository root with ReportGenerator on PATH.
+
+```powershell
+$run = Get-ChildItem TestResults/local -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+.\tests\Measure-Coverage.ps1 -ResultsDirectory $run.FullName -MinimumLinePercent 80 -MinimumBranchPercent 75
+```
 
 ## Project structure
 

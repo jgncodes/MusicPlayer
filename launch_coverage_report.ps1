@@ -30,15 +30,11 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host '[2/4] Finding the Cobertura coverage output...' -ForegroundColor Cyan
-& (Join-Path $root 'tests/Measure-Coverage.ps1') -ResultsDirectory $resultsDir
-$coverageFile = Get-ChildItem -Path "$resultsDir/*/coverage.cobertura.xml" -File
-
-Write-Host '[3/4] Generating the HTML report...' -ForegroundColor Cyan
+Write-Host '[2/4] Locating ReportGenerator...' -ForegroundColor Cyan
 $reportGenerator = Get-Command reportgenerator -ErrorAction SilentlyContinue
 if (-not $reportGenerator) {
     Write-Host 'ReportGenerator is not installed. Installing it as a global .NET tool...' -ForegroundColor Yellow
-    & dotnet tool install --global dotnet-reportgenerator-globaltool
+    & dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.6.1
     if ($LASTEXITCODE -ne 0) {
         Write-Error 'ReportGenerator installation failed. Install manually: dotnet tool install --global dotnet-reportgenerator-globaltool'
         exit 1
@@ -54,11 +50,9 @@ if (-not $reportGenerator) {
     $reportGeneratorPath = $reportGenerator.Source
 }
 
-& $reportGeneratorPath "-reports:$($coverageFile.FullName)" "-targetdir:$reportDir" '-reporttypes:Html;TextSummary'
-if ($LASTEXITCODE -ne 0) {
-    Write-Error 'ReportGenerator failed.'
-    exit $LASTEXITCODE
-}
+Write-Host '[3/4] Measuring coverage and generating the HTML report...' -ForegroundColor Cyan
+& (Join-Path $root 'tests/Measure-Coverage.ps1') -ResultsDirectory $resultsDir `
+    -ReportGeneratorPath $reportGeneratorPath -HtmlReportDirectory $reportDir
 
 $index = Join-Path $reportDir 'index.html'
 if (-not (Test-Path -LiteralPath $index -PathType Leaf)) {

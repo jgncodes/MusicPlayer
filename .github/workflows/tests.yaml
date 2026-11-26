@@ -22,7 +22,8 @@ jobs:
     # WPF requires Windows.
     runs-on: windows-latest
     env:
-      MINIMUM_LINE_COVERAGE: 70
+      MINIMUM_LINE_COVERAGE: 80
+      MINIMUM_BRANCH_COVERAGE: 75
 
     steps:
 
@@ -62,9 +63,16 @@ jobs:
           --logger "trx;LogFileName=MusicPlayer.Tests.trx"
           --results-directory TestResults/ci
 
-      - name: Enforce production line coverage
+      - name: Install ReportGenerator
+        run: dotnet tool install dotnet-reportgenerator-globaltool --version 5.6.1 --tool-path "$env:RUNNER_TEMP/coverage-tools"
+
+      - name: Enforce production line and branch coverage
         shell: pwsh
-        run: ./tests/Measure-Coverage.ps1 -ResultsDirectory TestResults/ci -MinimumLinePercent $env:MINIMUM_LINE_COVERAGE
+        run: >
+          ./tests/Measure-Coverage.ps1 -ResultsDirectory TestResults/ci
+          -ReportGeneratorPath "$env:RUNNER_TEMP/coverage-tools/reportgenerator.exe"
+          -MinimumLinePercent $env:MINIMUM_LINE_COVERAGE
+          -MinimumBranchPercent $env:MINIMUM_BRANCH_COVERAGE
 
       # STEP 6: Save test reports and coverage files.
       # Always execute this step, including when tests fail.
