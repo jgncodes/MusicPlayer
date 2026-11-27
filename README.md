@@ -1,6 +1,6 @@
 # MusicPlayer
 
-MusicPlayer is a Windows desktop application for playing local MP3 and WAV files. It combines a searchable, folder-based music library with an interactive waveform, playback-synchronized signal analysis, automatic tempo estimation, and a ten-band graphic equalizer.
+MusicPlayer is a Windows desktop application for playing local MP3 and WAV files. It combines a searchable, folder-based music library with an interactive waveform, playback-synchronized signal analysis, automatic tempo estimation, and switchable graphic and parametric equalizers.
 
 ## Requirements and installation
 
@@ -41,11 +41,14 @@ In MusicPlayer, choose **File → Open Folder** to browse a music folder. Select
 
 ### Audio equalizer
 
-Open **Sound → Equalizer** for ten bands centered at 31.25, 62.5, 125, 250, 500, 1,000, 2,000, 4,000, 8,000, and 16,000 Hz. Each band supports ±12 dB of gain. Built-in presets are **Flat**, **Bass Boost**, **Vocal**, and **V-Shape**. Editing a band marks the curve as **Custom**, and **Reset** restores all bands to 0 dB.
+Open **Sound → Equalizer** while playing or before opening a track. **Graphic EQ** is the startup mode. Its ten sliders cover 31.25 Hz to 16 kHz at ±12 dB. Choose **Flat**, **Bass Boost**, **Vocal**, or **V-Shape**. Manual slider edits select **Custom**. **Reset** clears the graphic bands, output trim and overload warning.
 
-The EQ starts flat and enabled. **Bypass EQ** preserves the curve for comparison. Each channel has independent peaking filters with Q = 1.4. A band at or above 45% of the decoded sample rate has no effect on that track. Active band changes, preset changes and bypass transitions crossfade over 20 ms of audio. Device buffering adds to the time before a change reaches the speakers.
+Choose **Parametric EQ** and **Add band**. Drag a point horizontally for frequency and vertically for gain, or select a band and type its exact values. A circle represents a bell. Left- and right-facing triangles represent low and high shelves. The ring and band number identify the selection. **Enabled** toggles one band. **Remove** frees its slot. Switching modes or closing the editor keeps both configurations for the session.
 
-Positive bands automatically reserve fixed headroom for the combined boost. Overlapping boosts can therefore play quieter than in earlier versions. A flat curve and cuts alone reserve 0 dB. **Output trim** adds 0 to −24 dB of attenuation and applies in bypass too. **Reset** clears the bands, trim and peak warning. Volume and mute act after the EQ and ramp over 20 ms. These preferences carry across tracks in the current session.
+- **Range.** The editor accepts 0–16 ordered bands. Each supports ±24 dB. Frequency runs from the greater of 5 Hz and 0.001% of the decoded sample rate through 49.5% of that rate. Bell Q runs from 0.25 to 16. Higher Q narrows the bell. Shelf Q runs from 0.25 to √0.5 and controls transition steepness. Changing a bell to a shelf caps its Q and displays a message when necessary.
+- **Keyboard.** Tab and Shift+Tab move between controls. Choose a band with the selector, use Space for checkboxes, and press Enter or leave a numeric field to apply it. Escape restores the accepted value or cancels a drag. Invalid input restores the last accepted setting and displays the reason.
+- **Graph.** The solid line shows the filter target. Choose the dashed **With headroom**, **Final output**, or **Selected band** overlay for comparison. The axes show logarithmic frequency and gain in dB. Shelf markers show the specified shelf gain at the transition frequency, where the individual curve is halfway to that gain in dB. Before opening a track, the graph uses a labeled 48 kHz preview. A lower-rate track temporarily omits bands outside its range.
+- **Gain staging.** Boosts automatically reserve headroom for the combined response. **Bypass EQ** temporarily flattens the filters and removes that compensation. Output trim (−24 to 0 dB), volume and mute still apply. Muted or zero-volume final output displays **Output silent**. During the approximately 20 ms transition the graph shows the requested steady-state target. Device buffering adds further audible latency.
 
 A transient can still exceed full scale. **Output over 0 dBFS · Clear** appears when a sample sent to the device exceeds ±1. Lower the trim, clear the warning and replay the passage to check it. The player uses static gain and preserves the floating-point waveform through this stage. The main window's RMS, peak and spectrum continue to describe the source file.
 
@@ -62,7 +65,7 @@ WPF starts the application through `App.xaml` and opens `MainWindow`. The window
 | [GraphicEqualizerDesign](Services/GraphicEqualizerDesign.cs) | Calculates sample-rate-specific peaking coefficients and a bound on combined boost. The render thread owns the filter delay lines. |
 | [AudioAnalysisService](Services/AudioAnalysisService.cs) | Reads metadata with TagLibSharp and decodes source audio independently for waveform, frequency, level, and tempo analysis. Manages the waveform and tempo caches. |
 | [MusicLibraryLogic](Services/MusicLibraryLogic.cs) and [PlaybackQueue](Services/PlaybackQueue.cs) | Implement folder discovery, filename matching, and visible-list navigation independently of WPF controls and audio hardware. |
-| [EqualizerWindow](EqualizerWindow.xaml.cs) | Uses the same playback service as the main window to edit band gains and apply presets. |
+| [EqualizerWindow](EqualizerWindow.xaml.cs) | Hosts both EQ modes, the response graph and keyboard-accessible band editing against the shared playback service. |
 
 ```mermaid
 flowchart TD
@@ -109,7 +112,7 @@ The tests use deterministic WAVs, in-memory sample providers, temporary music fo
 
 The launcher collects Release coverage into a fresh directory under `TestResults/local/`, keeps the TRX and Cobertura XML, generates `coverage-report/index.html` and opens it in the default browser. Use `-NoOpen` on a headless runner. ReportGenerator must be on PATH or installable as a global .NET tool. Initial dependency and tool installation requires access to a package source. Both results directories are ignored by Git.
 
-The Phase 2A Release run passed **221 tests**. ReportGenerator measured **89.64% production line coverage** (1,548/1,727) and **84.52% branch coverage** (639/756), including WPF. Tests cover decoded audio, filter response, live edits, overloads and seek resets. The equalizer window provides the ten-band graphic EQ. Physical listening and endpoint compatibility remain manual checks. [Parametric DSP engineering report](PARAMETRIC_EQ_REPORT.md) · [Audio engine report](AUDIO_ENGINE_REPORT.md) · [Earlier coverage audit](tests/COVERAGE.md)
+The Phase 2B engineering report records baseline and final Release coverage, response accuracy checks, WPF interaction tests, timing measurements and the manual playback checklist. [Interactive EQ report](PARAMETRIC_EQ_UI_REPORT.md) · [Parametric DSP report](PARAMETRIC_EQ_REPORT.md) · [Audio engine report](AUDIO_ENGINE_REPORT.md) · [Earlier coverage audit](tests/COVERAGE.md)
 
 ## Continuous integration
 

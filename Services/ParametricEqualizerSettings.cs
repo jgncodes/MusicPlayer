@@ -15,6 +15,13 @@ public sealed class ParametricEqualizerSettings
     public static ParametricEqualizerSettings Flat { get; } = new();
     public IReadOnlyList<ParametricBand> Bands { get; }
 
+    internal static double MinimumHz(int rate) => Math.Max(5, rate * 1e-5);
+    internal static double MaximumHz(int rate) => rate * 0.495;
+    internal static double MaximumQ(ParametricFilterType type) =>
+        type == ParametricFilterType.Peaking ? 16 : Math.Sqrt(0.5);
+    internal static bool IsAvailable(ParametricBand band, int rate) =>
+        band.FrequencyHz >= MinimumHz(rate) && band.FrequencyHz <= MaximumHz(rate);
+
     public ParametricEqualizerSettings(params ReadOnlySpan<ParametricBand> bands)
     {
         ArgumentOutOfRangeException.ThrowIfGreaterThan(bands.Length, MaxBands);
@@ -26,7 +33,7 @@ public sealed class ParametricEqualizerSettings
                 throw new ArgumentOutOfRangeException(nameof(bands), "A filter frequency must be finite and at least 5 Hz.");
             if (!double.IsFinite(band.GainDb) || Math.Abs(band.GainDb) > 24)
                 throw new ArgumentOutOfRangeException(nameof(bands), "Gain must be within ±24 dB.");
-            double maxQ = band.Type == ParametricFilterType.Peaking ? 16 : Math.Sqrt(0.5);
+            double maxQ = MaximumQ(band.Type);
             if (!double.IsFinite(band.Q) || band.Q < 0.25 || band.Q > maxQ)
                 throw new ArgumentOutOfRangeException(nameof(bands), $"Q must be in [0.25, {maxQ}].");
         }
@@ -50,7 +57,7 @@ public sealed class ParametricEqualizerSettings
         for (int i = 0; i < bands.Length; i++)
         {
             ParametricBand band = Bands[i];
-            if (band.FrequencyHz < sampleRate * 1e-5 || band.FrequencyHz > sampleRate * 0.495)
+            if (!IsAvailable(band, sampleRate))
             {
                 if (omitUnavailable)
                     continue;

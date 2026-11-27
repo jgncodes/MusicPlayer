@@ -15,7 +15,7 @@ The application already includes local MP3/WAV playback, a searchable folder-bas
 | Phase | Status | Deliverable |
 | --- | --- | --- |
 | 2A | Complete | Programmatic bell and shelf filters, mode switching, automatic headroom and a tested response API. See [the engineering report](PARAMETRIC_EQ_REPORT.md). |
-| 2B | Planned | Advanced EQ interface with a logarithmic frequency-response graph and editable band controls. |
+| 2B | Implemented; manual sign-off pending | Interactive DSP response graph, band dragging and precise keyboard editing. Physical listening and Windows scaling checks are in the [UI engineering report](PARAMETRIC_EQ_UI_REPORT.md). |
 | 2C | Planned | Versioned custom presets for graphic and parametric configurations, with save, load, rename and delete. |
 | 2D | Planned | Playback output settings, endpoint selection and validation on physical devices. |
 
@@ -73,11 +73,11 @@ The application already includes local MP3/WAV playback, a searchable folder-bas
 
 **Goal:** Visually explain what the EQ is doing to audio.
 
-- [ ] Add a compact frequency-response graph above the ten sliders.
-- [ ] Display frequency on a logarithmic x-axis and gain in dB on the y-axis.
+- [x] Show the requested frequency response above the graphic sliders and the parametric editor.
+- [x] Display frequency on a logarithmic x-axis and gain in dB on the y-axis.
 - [x] Calculate individual and combined responses from the audio engine's actual biquad coefficients, with selectable gain stages.
-- [ ] Update the curve when a band or preset changes.
-- [ ] Display a flat 0 dB line when Reset is pressed.
+- [x] Update the curve when a band or preset changes.
+- [x] Display a flat 0 dB filter curve when Reset is pressed.
 - [x] Test the response API against single-band boosts and cuts, shelves, mixed cascades and rendered impulses.
 
 **Done when:** The graph responds immediately and correctly reflects overlapping filters.

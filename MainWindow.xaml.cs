@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private const int MaxArtworkBytes = 5 * 1024 * 1024;
 
     private readonly AudioPlaybackService _player;
+    private EqualizerWindow? _equalizerWindow;
     private readonly AudioAnalysisService _analysis;
     private readonly Action<string> _showError;
     private readonly Random _random = new();
@@ -1056,12 +1057,16 @@ public partial class MainWindow : Window
     // MENUS AND CLEANUP ---------------------------------------------------
     private void Equalizer_Click(object sender, RoutedEventArgs e)
     {
-        EqualizerWindow window = new(_player)
+        if (_equalizerWindow is { } existing)
         {
-            Owner = this
-        };
-
-        window.Show();
+            if (existing.WindowState == WindowState.Minimized)
+                existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            return;
+        }
+        _equalizerWindow = new EqualizerWindow(_player) { Owner = this };
+        _equalizerWindow.Closed += (_, _) => _equalizerWindow = null;
+        _equalizerWindow.Show();
     }
 
     private void About_Click(object sender, RoutedEventArgs e)

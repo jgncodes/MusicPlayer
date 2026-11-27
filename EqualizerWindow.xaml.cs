@@ -1,4 +1,7 @@
 using System;
+using System.Globalization;
+using System.Windows.Automation;
+using System.Windows.Input;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,6 +19,9 @@ public partial class EqualizerWindow : Window
     private readonly TextBlock[] _valueLabels =
         new TextBlock[EqualizerSampleProvider.BandCount];
 
+    private readonly EqualizerEditor _editor;
+    private IReadOnlyList<int>? _displayedIds;
+    private bool _refreshing;
     private bool _ready;
     private bool _applyingPreset;
 
@@ -30,51 +36,207 @@ public partial class EqualizerWindow : Window
 
     public EqualizerWindow(AudioPlaybackService player)
     {
-        InitializeComponent();
-
-        // Store the existing audio playback service.
         _player = player;
-
-        // Create the 10 frequency sliders.
+        _editor = new EqualizerEditor(player);
+        InitializeComponent();
         BuildBandControls();
 
-        // Determine whether the current EQ is flat.
-        bool isFlat = true;
-
-        for (int i = 0; i < _sliders.Length; i++)
-        {
-            // Restore the gain for each frequency band.
-            _sliders[i].Value = player.GetBandGain(i);
-
-            if (Math.Abs(_sliders[i].Value) > 0.001)
-                isFlat = false;
-        }
-
-        BypassBox.IsChecked = !_player.EqualizerEnabled;
-        BypassBox.Checked += (_, _) => _player.SetEqualizerEnabled(false);
-        BypassBox.Unchecked += (_, _) => _player.SetEqualizerEnabled(true);
-        TrimSlider.Value = _player.OutputTrimDb;
-        TrimValue.Text = $"{TrimSlider.Value:0} dB";
+        BypassBox.Checked += BypassChanged;
+        BypassBox.Unchecked += BypassChanged;
         TrimSlider.ValueChanged += (_, e) =>
         {
-            _player.OutputTrimDb = (float)e.NewValue;
-            TrimValue.Text = $"{e.NewValue:0} dB";
+            if (!_refreshing)
+                _player.OutputTrimDb = (float)e.NewValue;
         };
         var peakTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         peakTimer.Tick += (_, _) => RefreshPeakWarning();
         Loaded += (_, _) => { RefreshPeakWarning(); peakTimer.Start(); };
-        Closed += (_, _) => peakTimer.Stop();
+        Closed += (_, _) =>
+        {
+            _ready = false;
+            peakTimer.Stop();
+            Graph.EndGesture();
+            _editor.Changed -= Refresh;
+            _editor.Dispose();
+        };
         PeakWarning.Click += (_, _) => { _player.ClearOverload(); RefreshPeakWarning(); };
-
-        // Show Flat if all gains are zero; otherwise show Custom.
-        PresetBox.SelectedIndex = isFlat ? 1 : 0;
-
-        // Allow slider events after initialization is complete.
+        Graph.EditRejected += ShowFeedback;
+        _editor.Changed += Refresh;
+        OverlayBox.SelectedIndex = 0;
         _ready = true;
-
-        UpdateValueLabels();
+        Refresh(EqualizerChange.Format);
     }
 
+    private void Refresh(EqualizerChange change)
+    {
+        if (!_ready)
+            return;
+        _refreshing = true;
+        try
+        {
+            bool parametric = _editor.Mode == EqualizerMode.Parametric;
+            if (change is EqualizerChange.Format or EqualizerChange.Mode or EqualizerChange.Selection ||
+                !ReferenceEquals(_displayedIds, _editor.Ids))
+                Graph.EndGesture();
+            ModeBox.SelectedIndex = parametric ? 1 : 0;
+            GraphicPanel.Visibility = parametric ? Visibility.Collapsed : Visibility.Visible;
+            ParametricPanel.Visibility = parametric ? Visibility.Visible : Visibility.Collapsed;
+            IndividualOption.IsEnabled = parametric && _editor.Selected.HasValue;
+            if (!IndividualOption.IsEnabled && (ResponseOverlay)OverlayBox.SelectedIndex == ResponseOverlay.SelectedBand)
+                OverlayBox.SelectedIndex = 0;
+            BypassBox.IsChecked = !_player.EqualizerEnabled;
+            TrimSlider.Value = _player.OutputTrimDb;
+            TrimValue.Text = $"{_player.OutputTrimDb:0.#} dB";
+
+            if (change is EqualizerChange.Graphic or EqualizerChange.Format or EqualizerChange.Mode)
+            {
+                for (int i = 0; i < _sliders.Length; i++)
+                    _sliders[i].Value = _player.GetBandGain(i);
+                PresetBox.SelectedIndex = Array.FindIndex(Presets, preset =>
+                    preset.Select((gain, i) => gain == _player.GetBandGain(i)).All(equal => equal)) + 1;
+                UpdateValueLabels();
+            }
+            if (change is EqualizerChange.Format or EqualizerChange.Mode or EqualizerChange.Bands or EqualizerChange.Selection)
+                RefreshFields();
+            RefreshGraph();
+        }
+        finally { _refreshing = false; }
+    }
+
+    private void RefreshGraph()
+    {
+        var response = _editor.Response();
+        var overlay = (ResponseOverlay)OverlayBox.SelectedIndex;
+        Graph.SetTarget(_editor, response, overlay);
+        HeadroomLabel.Text = $"Auto headroom  {response.HeadroomDb:0.0} dB";
+        FormatLabel.Text = _editor.IsPreview ? "Frequency (Hz)   ·   48 kHz preview" :
+            $"Frequency (Hz)   ·   {_editor.Rate / 1000.0:0.###} kHz track";
+        OverlayKey.Text = overlay switch
+        {
+            ResponseOverlay.Headroom => "┄  With headroom",
+            ResponseOverlay.Output => double.IsNegativeInfinity(response.GetDecibels(0, EqualizerResponseStage.Output))
+                ? "Output silent" : "┄  Final output",
+            ResponseOverlay.SelectedBand => $"┄  Band {_editor.SelectedId}",
+            _ => ""
+        };
+    }
+
+    private void RefreshFields()
+    {
+        if (!ReferenceEquals(_displayedIds, _editor.Ids))
+        {
+            _displayedIds = _editor.Ids;
+            BandBox.ItemsSource = _displayedIds.Select(id => $"Band {id}").ToArray();
+        }
+        BandBox.SelectedIndex = _editor.SelectedIndex;
+        var selected = _editor.Selected;
+        BandBox.IsEnabled = Fields.IsEnabled = RemoveBand.IsEnabled = selected.HasValue;
+        TypeBox.IsEnabled = GainBox.IsEnabled = QBox.IsEnabled =
+            selected.HasValue && ParametricEqualizerSettings.IsAvailable(selected.Value, _editor.Rate);
+        AddBand.IsEnabled = _editor.CanAdd;
+        BandCountLabel.Text = $"{_editor.Bands.Count} / {ParametricEqualizerSettings.MaxBands} bands";
+        AddBand.ToolTip = _editor.CanAdd ? "Add a flat bell filter" : "All slots are occupied or this format has no usable frequencies.";
+        FrequencyBox.Text = selected is { } f ? DisplayNumber(BandParameter.Frequency, f) : "";
+        GainBox.Text = selected is { } g ? DisplayNumber(BandParameter.Gain, g) : "";
+        QBox.Text = selected is { } q ? DisplayNumber(BandParameter.Q, q) : "";
+        BandEnabled.IsChecked = selected?.Enabled ?? false;
+        TypeBox.SelectedIndex = selected.HasValue ? (int)selected.Value.Type : -1;
+        ShowFeedback(selected switch
+        {
+            null => "Add a band to shape the response.",
+            { } band when !ParametricEqualizerSettings.IsAvailable(band, _editor.Rate) =>
+                "Outside this format’s range. Choose an available frequency to edit this filter on this track.",
+            { Enabled: false } => "This band is disabled.",
+            _ => ""
+        });
+    }
+
+    private void ShowFeedback(string message) => Feedback.Text = message;
+    private void FinishEdit(string? error)
+    {
+        if (error is null)
+            return;
+        Refresh(EqualizerChange.Selection);
+        ShowFeedback(error);
+    }
+
+    private void BypassChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_refreshing) _player.SetEqualizerEnabled(BypassBox.IsChecked != true);
+    }
+
+    private void ModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_ready && !_refreshing)
+            _editor.Mode = (EqualizerMode)ModeBox.SelectedIndex;
+    }
+
+    private void OverlayChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_ready && !_refreshing)
+            RefreshGraph();
+    }
+
+    private void BandSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (_ready && !_refreshing && BandBox.SelectedIndex >= 0)
+            _editor.Select(_editor.Ids[BandBox.SelectedIndex]);
+    }
+
+    private void AddBandClick(object sender, RoutedEventArgs e) => FinishEdit(_editor.Add());
+    private void RemoveBandClick(object sender, RoutedEventArgs e) => FinishEdit(_editor.Remove());
+
+    private void TypeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || _refreshing || TypeBox.SelectedIndex < 0)
+            return;
+        var type = (ParametricFilterType)TypeBox.SelectedIndex;
+        bool reduced = _editor.Selected?.Q > ParametricEqualizerSettings.MaximumQ(type);
+        string? error = _editor.ChangeType(type);
+        FinishEdit(error);
+        if (error is null && reduced)
+            ShowFeedback("Q adjusted to the shelf maximum (√0.5).");
+    }
+
+    private void BandEnabledClick(object sender, RoutedEventArgs e)
+    {
+        if (_editor.Selected is { } band)
+            FinishEdit(_editor.Replace(band with { Enabled = BandEnabled.IsChecked == true }));
+    }
+
+    private void NumberKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+            CommitNumber((TextBox)sender);
+        else if (e.Key == Key.Escape)
+            Refresh(EqualizerChange.Selection);
+        else return;
+        e.Handled = true;
+    }
+
+    private void NumberLostFocus(object sender, KeyboardFocusChangedEventArgs e) => CommitNumber((TextBox)sender);
+
+    private static string DisplayNumber(BandParameter parameter, ParametricBand band) => parameter switch
+    {
+        BandParameter.Frequency => band.FrequencyHz.ToString("0.######"),
+        BandParameter.Gain => band.GainDb.ToString("0.######"),
+        // The exact shelf limit rounds upward at some decimal precisions.
+        BandParameter.Q => band.Q.ToString("R"),
+        _ => throw new ArgumentOutOfRangeException(nameof(parameter))
+    };
+
+    private void CommitNumber(TextBox field)
+    {
+        if (!_ready || _refreshing || _editor.Selected is not { } band || _editor.Mode != EqualizerMode.Parametric)
+            return;
+        var parameter = field == FrequencyBox ? BandParameter.Frequency : field == GainBox ? BandParameter.Gain : BandParameter.Q;
+        if (field.Text == DisplayNumber(parameter, band))
+            return;
+        string? error = _editor.Edit(parameter, field.Text, CultureInfo.CurrentCulture);
+        if (error is null)
+            field.Text = DisplayNumber(parameter, _editor.Selected!.Value);
+        FinishEdit(error);
+    }
 
     private void BuildBandControls()
     {
@@ -146,6 +308,7 @@ public partial class EqualizerWindow : Window
                 ? $"{frequency / 1000:0.#} kHz"
                 : $"{frequency:0.#}";
 
+            AutomationProperties.SetName(slider, $"{frequency:G} Hz graphic gain in decibels");
             TextBlock nameLabel = new()
             {
                 Text = frequencyLabel,
@@ -161,7 +324,7 @@ public partial class EqualizerWindow : Window
             // Update the audio filter whenever a slider moves.
             slider.ValueChanged += (_, _) =>
             {
-                if (!_ready || _applyingPreset)
+                if (!_ready || _refreshing || _applyingPreset)
                     return;
 
                 float gain = (float)slider.Value;
@@ -204,7 +367,7 @@ public partial class EqualizerWindow : Window
         object sender,
         SelectionChangedEventArgs e)
     {
-        if (!_ready || _applyingPreset)
+        if (!_ready || _refreshing || _applyingPreset)
             return;
 
         int index = PresetBox.SelectedIndex;

@@ -3,6 +3,8 @@ using NAudio.Wave;
 
 namespace MusicPlayer;
 
+internal enum EqualizerChange { Format, Mode, Graphic, Bands, Level, Bypass, Selection }
+
 public sealed class PlaybackErrorEventArgs(Exception exception) : EventArgs
 {
     public Exception ErrorException { get; } = exception;
@@ -33,6 +35,8 @@ public sealed class AudioPlaybackService
     }
 
     public event EventHandler? MediaOpened;
+    internal event Action<EqualizerChange>? EqualizerChanged;
+    internal int? DecodedSampleRate => _session?.Eq.WaveFormat.SampleRate;
     public event EventHandler? MediaEnded;
     public event EventHandler<PlaybackErrorEventArgs>? MediaFailed;
 
@@ -89,7 +93,11 @@ public sealed class AudioPlaybackService
     public void ClearOverload() => _session?.Eq.ClearOverload();
 
     private float OutputLevel => _isMuted ? 0 : (float)(_volume * Math.Pow(10, _trimDb / 20.0));
-    private void ApplyLevel() => _session?.Eq.SetOutputLevel(OutputLevel);
+    private void ApplyLevel()
+    {
+        _session?.Eq.SetOutputLevel(OutputLevel);
+        EqualizerChanged?.Invoke(EqualizerChange.Level);
+    }
 
     public bool EqualizerEnabled => _eqEnabled;
     public EqualizerMode Mode
@@ -102,22 +110,47 @@ public sealed class AudioPlaybackService
             if (_session is { } session)
                 session.Eq.Mode = value;
             _mode = value;
+            EqualizerChanged?.Invoke(EqualizerChange.Mode);
         }
     }
 
     public ParametricEqualizerSettings ParametricSettings
     {
         get => _parametric;
-        set
+        set => PublishBands(value, retainUnavailable: false);
+    }
+
+    // Keep unavailable filter parameters across edits on a lower-rate track.
+    // Their enabled flag is still a preference for the next compatible track.
+    internal void PublishBands(ParametricEqualizerSettings settings, bool retainUnavailable)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (_session is { } session)
         {
-            ArgumentNullException.ThrowIfNull(value);
-            if (_session is { } session)
-                session.Eq.ParametricSettings = value;
-            _parametric = value;
+            int rate = session.Eq.WaveFormat.SampleRate;
+            if (retainUnavailable)
+            {
+                var retained = _parametric.Bands.Where(b => !ParametricEqualizerSettings.IsAvailable(b, rate))
+                    .Select(b => b with { Enabled = false }).ToList();
+                foreach (var band in settings.Bands)
+                    if (!ParametricEqualizerSettings.IsAvailable(band, rate) && !retained.Remove(band with { Enabled = false }))
+                        throw new ArgumentOutOfRangeException(nameof(settings), "Choose a frequency available on this track.");
+            }
+            session.Eq.ApplyParametricSettings(settings, omitUnavailable: retainUnavailable);
         }
+        _parametric = settings;
+        EqualizerChanged?.Invoke(EqualizerChange.Bands);
     }
 
     public EqualizerResponse? GetEqualizerResponse() => _session?.Eq.GetResponse();
+    internal EqualizerResponse PreviewResponse(int rate)
+    {
+        var graphic = _mode == EqualizerMode.Graphic;
+        var curve = !_eqEnabled ? EqualizerCurve.Flat : graphic
+            ? new GraphicEqualizerDesign(rate).Create(_eqGains)
+            : _parametric.Design(rate, omitUnavailable: true);
+        return new EqualizerResponse(curve, rate, graphic ? _eqGains.Length : _parametric.Bands.Count, OutputLevel);
+    }
     public float GetBandGain(int band) => _eqGains[band];
 
     public void SetBandGain(int band, float gainDb)
@@ -126,6 +159,7 @@ public sealed class AudioPlaybackService
         float gain = EqualizerSampleProvider.ClampGain(gainDb);
         _eqGains[band] = gain;
         _session?.Eq.SetBandGain(band, gain);
+        EqualizerChanged?.Invoke(EqualizerChange.Graphic);
     }
 
     internal void SetPreset(ReadOnlySpan<float> gains)
@@ -134,12 +168,14 @@ public sealed class AudioPlaybackService
         EqualizerSampleProvider.CopyValidatedGains(gains, validated);
         validated.CopyTo(_eqGains);
         _session?.Eq.SetBands(validated);
+        EqualizerChanged?.Invoke(EqualizerChange.Graphic);
     }
 
     public void SetEqualizerEnabled(bool enabled)
     {
         _eqEnabled = enabled;
         _session?.Eq.SetEnabled(enabled);
+        EqualizerChanged?.Invoke(EqualizerChange.Bypass);
     }
 
     public void ResetEqualizer()
@@ -181,6 +217,7 @@ public sealed class AudioPlaybackService
             Report(error);
             return;
         }
+        EqualizerChanged?.Invoke(EqualizerChange.Format);
         MediaOpened?.Invoke(this, EventArgs.Empty);
     }
 
@@ -238,7 +275,10 @@ public sealed class AudioPlaybackService
     {
         Session? session = _session;
         _session = null;
-        session?.Close();
+        if (session is null)
+            return;
+        try { session.Close(); }
+        finally { EqualizerChanged?.Invoke(EqualizerChange.Format); }
     }
 
     // A retired output may still be reading the previous file until its stop

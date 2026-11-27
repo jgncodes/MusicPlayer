@@ -1,9 +1,9 @@
 <Window x:Class="MusicPlayer.EqualizerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Graphic Equalizer"
-        Width="760" Height="420"
-        MinWidth="700" MinHeight="380"
+        xmlns:local="clr-namespace:MusicPlayer" Title="Equalizer"
+        Width="880" Height="660"
+        MinWidth="690" MinHeight="545"
         WindowStartupLocation="CenterOwner"
         Background="#1B2330" Foreground="White">
 
@@ -176,78 +176,143 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#293A4E"/><Setter Property="Foreground" Value="#F3F7FC"/>
+            <Setter Property="BorderBrush" Value="#536A82"/><Setter Property="Padding" Value="12,4"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="1" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#385572"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#416787"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.55"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style TargetType="Label"><Setter Property="Foreground" Value="#BDD1E3"/><Setter Property="Padding" Value="0,0,0,3"/></Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Height" Value="29"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="7,1"/><Setter Property="Background" Value="#141D29"/>
+            <Setter Property="Foreground" Value="White"/><Setter Property="CaretBrush" Value="White"/><Setter Property="BorderBrush" Value="#536A82"/>
+            <EventSetter Event="KeyDown" Handler="NumberKeyDown"/><EventSetter Event="LostKeyboardFocus" Handler="NumberLostFocus"/>
+        </Style>
+        <Style x:Key="{x:Static SystemParameters.FocusVisualStyleKey}">
+            <Setter Property="Control.Template"><Setter.Value><ControlTemplate>
+                <Rectangle Margin="1" Stroke="#FFD18F" StrokeDashArray="2 1" StrokeThickness="2" IsHitTestVisible="False"/>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
     </Window.Resources>
 
-    <Grid Margin="18">
+    <Grid Margin="18,14">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>  <!-- Title -->
-            <RowDefinition Height="Auto"/>  <!-- Preset and Reset -->
-            <RowDefinition Height="Auto"/>  <!-- Gain labels -->
-            <RowDefinition Height="*"/>     <!-- Ten sliders -->
-            <RowDefinition Height="Auto"/>  <!-- Frequency footer -->
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-
-        <TextBlock Grid.Row="0"
-                   Text="Graphic Equalizer"
-                   FontSize="19"
-                   FontWeight="SemiBold"
-                   Foreground="White"
-                   Margin="0,0,0,16"/>
-
-        <Grid Grid.Row="1" Margin="0,0,0,16">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- CHANGE 6: The preset list is now a dark themed dropdown. -->
-            <ComboBox x:Name="PresetBox"
-                      Grid.Column="0"
-                      Style="{StaticResource DarkPresetComboBoxStyle}"
-                      Height="32"
-                      SelectionChanged="PresetChanged"
-                      Margin="0,0,8,0">
-                <ComboBoxItem Content="Custom"/>
-                <ComboBoxItem Content="Flat"/>
-                <ComboBoxItem Content="Bass Boost"/>
-                <ComboBoxItem Content="Vocal"/>
-                <ComboBoxItem Content="V-Shape"/>
+        <DockPanel Margin="0,0,0,12" LastChildFill="False">
+            <TextBlock Text="Equalizer" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,24,0"/>
+            <ComboBox x:Name="ModeBox" Width="155" Height="32" Style="{StaticResource DarkPresetComboBoxStyle}"
+                      AutomationProperties.Name="Equalizer mode" SelectionChanged="ModeChanged">
+                <ComboBoxItem Content="Graphic EQ"/><ComboBoxItem Content="Parametric EQ"/>
             </ComboBox>
-
-            <!-- Reset is still handled by ResetEq_Click in the code-behind.
-                 That method should set all 10 gains to 0 and select Flat. -->
-            <Button Grid.Column="1"
-                    Content="Reset"
-                    Click="ResetEq_Click"
-                    Background="#253244"
-                    Foreground="White"
-                    BorderBrush="#465671"
-                    Padding="16,6"/>
-        </Grid>
-
-        <Grid Grid.Row="2" Margin="0,0,0,8">
-            <TextBlock Text="+12 dB" FontSize="10"
-                       Foreground="#9EB3CD" HorizontalAlignment="Left"/>
-            <TextBlock Text="Boosted bands reserve headroom automatically" FontSize="11"
-                       Foreground="#9EB3CD" HorizontalAlignment="Right"/>
-        </Grid>
-
-        <!-- CHANGE 7: Same 10-band layout. EqualizerWindow.xaml.cs adds
-             the frequency cards / vertical sliders to BandsPanel at runtime. -->
-        <UniformGrid x:Name="BandsPanel" Grid.Row="3"
-                     Columns="10" Rows="1"/>
-
-        <DockPanel Grid.Row="4" Margin="0,12,0,0" LastChildFill="False">
-            <CheckBox x:Name="BypassBox" Content="Bypass EQ" Foreground="White"
-                      VerticalAlignment="Center" Margin="0,0,20,0"/>
-            <TextBlock Text="Output trim" VerticalAlignment="Center"/>
-            <Slider x:Name="TrimSlider" Minimum="-24" Maximum="0" Value="0" Width="120"
-                    Margin="8,0" IsSnapToTickEnabled="True" TickFrequency="1"
-                    AutomationProperties.Name="Output trim in decibels"/>
-            <TextBlock x:Name="TrimValue" VerticalAlignment="Center"/>
-            <Button x:Name="PeakWarning" DockPanel.Dock="Right" Padding="8,3"
-                    Content="Output over 0 dBFS · Clear" Visibility="Hidden"
-                    ToolTip="A post-volume sample exceeded full scale. Reduce output trim."/>
+            <CheckBox x:Name="BypassBox" Content="Bypass EQ" Foreground="White" DockPanel.Dock="Right"
+                      VerticalAlignment="Center" ToolTip="Pass audio through with the current volume and output trim"/>
         </DockPanel>
+
+        <Border Grid.Row="1" Background="#141D29" BorderBrush="#415168" BorderThickness="1" CornerRadius="6">
+            <Grid Margin="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <DockPanel Margin="14,9" LastChildFill="False">
+                    <TextBlock Text="Frequency response" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="OverlayBox" DockPanel.Dock="Right" Width="164" Height="29"
+                              Style="{StaticResource DarkPresetComboBoxStyle}" AutomationProperties.Name="Response overlay"
+                              SelectionChanged="OverlayChanged">
+                        <ComboBoxItem Content="Filters only"/><ComboBoxItem Content="With headroom"/>
+                        <ComboBoxItem Content="Final output"/><ComboBoxItem x:Name="IndividualOption" Content="Selected band"/>
+                    </ComboBox>
+                </DockPanel>
+                <local:ResponseGraph x:Name="Graph" Grid.Row="1" AutomationProperties.Name="Target frequency response graph"
+                                     AutomationProperties.HelpText="Use the band selector and numeric controls for keyboard editing."/>
+                <DockPanel Grid.Row="2" Margin="14,2,14,8" LastChildFill="False">
+                    <TextBlock Text="━  Filter target (dB)" Foreground="#82D4FF"/>
+                    <TextBlock x:Name="OverlayKey" Margin="16,0,0,0" Foreground="#FFD18F"/>
+                    <TextBlock x:Name="FormatLabel" DockPanel.Dock="Right" Foreground="#B3C5D7"/>
+                </DockPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid x:Name="GraphicPanel">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Graphic preset" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <ComboBox x:Name="PresetBox" Grid.Column="1" Width="190" HorizontalAlignment="Left"
+                              Style="{StaticResource DarkPresetComboBoxStyle}" Height="30" AutomationProperties.Name="Graphic preset"
+                              SelectionChanged="PresetChanged">
+                        <ComboBoxItem Content="Custom"/><ComboBoxItem Content="Flat"/><ComboBoxItem Content="Bass Boost"/>
+                        <ComboBoxItem Content="Vocal"/><ComboBoxItem Content="V-Shape"/>
+                    </ComboBox>
+                    <Button Grid.Column="2" Content="Reset" Click="ResetEq_Click" ToolTip="Reset graphic bands, output trim and overload warning"/>
+                </Grid>
+                <UniformGrid x:Name="BandsPanel" Grid.Row="1" Columns="10" Rows="1" Height="132"/>
+            </Grid>
+            <Grid x:Name="ParametricPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <DockPanel LastChildFill="False" VerticalAlignment="Center">
+                    <TextBlock Text="Band" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="BandBox" Width="120" Height="30" Style="{StaticResource DarkPresetComboBoxStyle}"
+                              AutomationProperties.Name="Selected filter band" SelectionChanged="BandSelected"/>
+                    <Button x:Name="AddBand" Content="_Add band" Margin="12,0,5,0" Click="AddBandClick" ToolTipService.ShowOnDisabled="True"/>
+                    <Button x:Name="RemoveBand" Content="_Remove" Click="RemoveBandClick" ToolTip="Remove the selected band"/>
+                    <TextBlock x:Name="BandCountLabel" DockPanel.Dock="Right" Foreground="#B3C5D7" VerticalAlignment="Center"/>
+                </DockPanel>
+                <Grid x:Name="Fields" Grid.Row="1" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.4*"/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,12,0">
+                        <Label Target="{Binding ElementName=TypeBox}" Content="Filter type"/>
+                        <ComboBox x:Name="TypeBox" Height="29" Style="{StaticResource DarkPresetComboBoxStyle}" SelectionChanged="TypeChanged"
+                                  AutomationProperties.Name="Filter type" ToolTip="Shelves use a damping Q up to 0.7071">
+                            <ComboBoxItem Content="Bell"/><ComboBoxItem Content="Low shelf"/><ComboBoxItem Content="High shelf"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                        <Label Target="{Binding ElementName=FrequencyBox}" Content="Frequency (Hz)"/>
+                        <TextBox x:Name="FrequencyBox" AutomationProperties.Name="Frequency in hertz" ToolTip="Bell center or shelf half-gain frequency"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                        <Label Target="{Binding ElementName=GainBox}" Content="Gain (dB)"/>
+                        <TextBox x:Name="GainBox" AutomationProperties.Name="Band gain in decibels" ToolTip="Set gain from −24 to +24 dB"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Margin="0,0,12,0">
+                        <Label Target="{Binding ElementName=QBox}" Content="Q"/>
+                        <TextBox x:Name="QBox" AutomationProperties.Name="Filter Q" ToolTip="Higher Q narrows a bell or steepens a shelf"/>
+                    </StackPanel>
+                    <CheckBox x:Name="BandEnabled" Content="Enabled" Grid.Column="4" Foreground="White" VerticalAlignment="Bottom"
+                              Margin="0,0,0,6" AutomationProperties.Name="Selected band enabled" Click="BandEnabledClick"/>
+                </Grid>
+                <TextBlock x:Name="Feedback" Grid.Row="2" Margin="0,6,0,0" MinHeight="19" TextWrapping="Wrap"
+                           AutomationProperties.LiveSetting="Polite" Foreground="#FFD18F"/>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="3" BorderThickness="0,1,0,0" BorderBrush="#415168" Margin="0,6,0,0" Padding="0,9,0,0">
+            <DockPanel LastChildFill="False">
+                <TextBlock x:Name="HeadroomLabel" Foreground="#B3C5D7" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                <TextBlock Text="Output trim" VerticalAlignment="Center"/>
+                <Slider x:Name="TrimSlider" Minimum="-24" Maximum="0" Width="92" Margin="8,0"
+                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1" AutomationProperties.Name="Output trim in decibels"/>
+                <TextBlock x:Name="TrimValue" VerticalAlignment="Center"/>
+                <Button x:Name="PeakWarning" DockPanel.Dock="Right" Content="Output over 0 dBFS · Clear" Visibility="Hidden"
+                        ToolTip="A post-volume sample exceeded full scale. Reduce output trim."/>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>
